@@ -27,6 +27,18 @@
             <artifactId>bot-algorithms</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>com.tradingbot</groupId>
+            <artifactId>bot-persistence</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Spring Boot (for MongoDB integration in permutation mode) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter</artifactId>
+            <optional>true</optional>
+        </dependency>
 
         <!-- Lombok -->
         <dependency>

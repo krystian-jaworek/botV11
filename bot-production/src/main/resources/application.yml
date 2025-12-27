@@ -1,0 +1,45 @@
+spring:
+  application:
+    name: trading-bot-production
+
+server:
+  port: 8080
+
+# MongoDB configuration
+mongodb:
+  connection-string: mongodb://admin:password@localhost:27017/
+  database: botV11
+
+# Bybit API configuration
+bybit:
+  api:
+    base-url: https://api.bybit.com
+    testnet-url: https://api-testnet.bybit.com
+    use-testnet: false
+    api-key: ${BYBIT_API_KEY:your-api-key-here}
+    api-secret: ${BYBIT_API_SECRET:your-api-secret-here}
+  rate-limit:
+    max-requests-per-second: 10
+
+# Trading configuration
+trading:
+  scheduler:
+    enabled: true
+    interval-ms: 60000  # 1 minute
+  initial-capital-per-pair: 1000.0
+
+# Debug configuration
+debug:
+  event-sourcing:
+    enabled: false
+    collection-name: algorithm-events
+
+# Logging
+logging:
+  level:
+    root: INFO
+    com.tradingbot: DEBUG
+    org.springframework.data.mongodb: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
