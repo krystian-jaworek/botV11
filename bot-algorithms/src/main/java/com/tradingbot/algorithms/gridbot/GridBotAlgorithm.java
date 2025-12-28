@@ -108,7 +108,7 @@ public class GridBotAlgorithm implements TradingAlgorithm<GridBotConfig> {
         // First, check if any open positions should be closed (take profit)
         for (Position position : portfolio.getOpenPositions().values()) {
             if (shouldTakeProfit(position, currentPrice)) {
-                log.info("Taking profit on position {} at level {}",
+                log.debug("Taking profit on position {} at level {}",
                     position.getId().substring(0, 8),
                     positionToLevel.get(position.getId()));
 
@@ -133,7 +133,7 @@ public class GridBotAlgorithm implements TradingAlgorithm<GridBotConfig> {
                 // Check if we have enough cash
                 BigDecimal cost = quantity.multiply(buyPrice);
                 if (portfolio.hasEnoughCash(cost)) {
-                    log.info("Opening position at grid level {} (price: {})", level, buyPrice);
+                    log.debug("Opening position at grid level {} (price: {})", level, buyPrice);
 
                     // We'll track the position after it's created, so we need to return the decision
                     // and handle the tracking in a callback. For now, we'll use metadata to store level.
