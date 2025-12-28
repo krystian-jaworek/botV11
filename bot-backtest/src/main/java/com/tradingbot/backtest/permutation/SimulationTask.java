@@ -32,11 +32,13 @@ public class SimulationTask {
         long executionTimeMillis;
         boolean success;
         String errorMessage;
+        Object algorithmConfig;  // Algorithm-specific configuration (e.g., GridBotConfig)
 
-        public static Result success(int taskId, SimulationResult result, long executionTime) {
+        public static Result success(int taskId, SimulationResult result, Object config, long executionTime) {
             return Result.builder()
                 .taskId(taskId)
                 .simulationResult(result)
+                .algorithmConfig(config)
                 .executionTimeMillis(executionTime)
                 .success(true)
                 .build();

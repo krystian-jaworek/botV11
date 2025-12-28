@@ -90,13 +90,13 @@ public class ParallelSimulationExecutor {
                         double avgTimePerSim = elapsed / (double) completed;
                         long estimatedRemaining = (long) (avgTimePerSim * (tasks.size() - completed));
 
-                        log.info("Progress: {}/{} ({:.1f}%) - Success: {} | Failed: {} | Avg: {}ms | ETA: {}s",
+                        log.info("Progress: {}/{} ({}%) - Success: {} | Failed: {} | Avg: {}ms | ETA: {}s",
                             completed,
                             tasks.size(),
                             String.format("%.1f", percentComplete),
                             successCount.get(),
                             failureCount.get(),
-                            String.format("%.0f", avgTimePerSim),
+                            Math.round(avgTimePerSim),
                             estimatedRemaining / 1000);
                     }
                 });
@@ -121,7 +121,7 @@ public class ParallelSimulationExecutor {
         double avgTime = totalTime / (double) tasks.size();
 
         log.info("Parallel execution completed in {}ms (avg {}ms per simulation)",
-            totalTime, String.format("%.0f", avgTime));
+            totalTime, Math.round(avgTime));
         log.info("Results: {} successful, {} failed, {} total",
             successCount.get(), failureCount.get(), results.size());
 
@@ -149,7 +149,10 @@ public class ParallelSimulationExecutor {
 
             long executionTime = System.currentTimeMillis() - taskStart;
 
-            return SimulationTask.Result.success(task.getTaskId(), result, executionTime);
+            // Get algorithm config for persistence
+            Object algorithmConfig = task.getAlgorithm().getConfig();
+
+            return SimulationTask.Result.success(task.getTaskId(), result, algorithmConfig, executionTime);
 
         } catch (Exception e) {
             long executionTime = System.currentTimeMillis() - taskStart;

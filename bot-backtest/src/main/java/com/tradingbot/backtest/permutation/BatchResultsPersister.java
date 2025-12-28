@@ -89,8 +89,8 @@ public class BatchResultsPersister implements AutoCloseable {
             return;
         }
 
-        // Convert to document
-        String configJson = serializeConfig(result.getSimulationResult().getAlgorithmName());
+        // Convert to document with algorithm configuration
+        String configJson = serializeConfig(result.getAlgorithmConfig());
         SimulationResultDocument document = SimulationResultDocument.fromSimulationResult(
             result.getSimulationResult(),
             configJson
@@ -180,15 +180,17 @@ public class BatchResultsPersister implements AutoCloseable {
     }
 
     /**
-     * Serialize algorithm config to JSON (placeholder - can be enhanced)
+     * Serialize algorithm config to JSON
      */
-    private String serializeConfig(String algorithmName) {
+    private String serializeConfig(Object algorithmConfig) {
+        if (algorithmConfig == null) {
+            return "{}";
+        }
+
         try {
-            return objectMapper.writeValueAsString(
-                java.util.Map.of("algorithm", algorithmName)
-            );
+            return objectMapper.writeValueAsString(algorithmConfig);
         } catch (JsonProcessingException e) {
-            log.warn("Failed to serialize config", e);
+            log.warn("Failed to serialize config: {}", algorithmConfig.getClass().getName(), e);
             return "{}";
         }
     }
