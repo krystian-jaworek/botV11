@@ -139,7 +139,7 @@ public class TrendFollowingParameterPermutation {
     }
 
     /**
-     * Create default permutation with REDUCED ranges (~1000 combinations).
+     * Create default permutation with REDUCED ranges (~800 combinations).
      */
     public static TrendFollowingParameterPermutation defaultPermutation() {
         return TrendFollowingParameterPermutation.builder()
@@ -147,21 +147,21 @@ public class TrendFollowingParameterPermutation {
             .primaryTimeframe(Timeframe.D1)
             .secondaryTimeframe(Timeframe.W1)
 
-            // EMA PRIMARY (2 × 3 = 6 combinations)
+            // EMA PRIMARY (2 × 2 = 4 valid combinations)
             .emaFastPrimaryRange(List.of(50, 100))
-            .emaSlowPrimaryRange(List.of(150, 200, 250))
+            .emaSlowPrimaryRange(List.of(150, 200))  // REDUCED from 3 to 2
 
-            // EMA SECONDARY (2 × 2 = 4 combinations)
+            // EMA SECONDARY (2 × 2 = 4 valid combinations)
             .emaFastSecondaryRange(List.of(20, 30))
             .emaSlowSecondaryRange(List.of(50, 100))
 
-            // MACD (2 × 2 × 2 = 8 combinations)
-            .macdFastRange(List.of(12, 16))
-            .macdSlowRange(List.of(26, 32))
-            .macdSignalRange(List.of(9, 12))
+            // MACD (1 × 1 × 1 = 1 combination - use defaults only)
+            .macdFastRange(List.of(12))      // REDUCED to default only
+            .macdSlowRange(List.of(26))      // REDUCED to default only
+            .macdSignalRange(List.of(9))     // REDUCED to default only
 
-            // HIGHER LOWS (3 × 2 = 6 combinations)
-            .higherLogsPeriodsRange(List.of(3, 4, 5))
+            // HIGHER LOWS (2 × 2 = 4 combinations)
+            .higherLogsPeriodsRange(List.of(3, 4))  // REDUCED from 3 to 2
             .swingDetectionPeriodsRange(List.of(5, 7))
 
             // HISTOGRAM (2 values)
@@ -180,14 +180,12 @@ public class TrendFollowingParameterPermutation {
                 new BigDecimal("25")
             ))
 
-            // TRAILING STOP (2 × 2 = 4 combinations)
+            // TRAILING STOP (1 × 1 = 1 combination - use defaults only)
             .trailingStopActivationPctRange(List.of(
-                new BigDecimal("50"),
-                new BigDecimal("75")
+                new BigDecimal("50")  // REDUCED to default only
             ))
             .trailingStopDistancePctRange(List.of(
-                new BigDecimal("20"),
-                new BigDecimal("25")
+                new BigDecimal("20")  // REDUCED to default only
             ))
 
             // Position sizing (fixed)
