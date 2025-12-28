@@ -25,19 +25,21 @@ import java.util.List;
  *
  * Examples:
  *   (no arguments)
- *     → Uses default: BTCUSDT-1-365.txt, no MongoDB
+ *     → Uses default: BTCUSDT-1-365.txt, MongoDB enabled (default)
  *
  *   ETHUSDT
- *     → Uses ETHUSDT-1-365.txt, no MongoDB
+ *     → Uses ETHUSDT-1-365.txt, MongoDB enabled (default)
  *
  *   BTCUSDT-5-90.txt
- *     → Uses custom file, no MongoDB
+ *     → Uses custom file, MongoDB enabled (default)
  *
- *   BTCUSDT true
- *     → Uses BTCUSDT-1-365.txt, saves to MongoDB
+ *   BTCUSDT false
+ *     → Uses BTCUSDT-1-365.txt, MongoDB disabled
  *
- *   BTCUSDT-1-365.txt true
- *     → Uses custom file, saves to MongoDB
+ *   BTCUSDT-1-365.txt false
+ *     → Uses custom file, MongoDB disabled
+ *
+ * Note: MongoDB persistence is ENABLED by default. Use 'false' as second argument to disable.
  *
  * The candle file should be placed in src/main/resources/
  *
@@ -56,7 +58,12 @@ public class GridBotPermutationRunner {
 
     public static void main(String[] args) {
         String candleFileName = resolveCandleFileName(args);
-        boolean saveToMongo = args.length > 1 && Boolean.parseBoolean(args[1]);
+
+        // MongoDB persistence enabled by default
+        boolean saveToMongo = true;
+        if (args.length > 1) {
+            saveToMongo = Boolean.parseBoolean(args[1]);
+        }
 
         try {
             runPermutations(candleFileName, saveToMongo);

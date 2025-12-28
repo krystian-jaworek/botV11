@@ -53,20 +53,22 @@ File naming convention: `<PAIR>-<INTERVAL_MINUTES>-<DAYS>.txt`
 
 ### 2. GridBot Permutation Mode (Parameter Optimization)
 
-Run 300 parallel GridBot simulations with different parameter combinations:
+Run 300 parallel GridBot simulations with different parameter combinations.
+
+**Note:** MongoDB persistence is **enabled by default**. Results are saved to `GridBot-<PAIR>` collection.
 
 ```bash
-# Default (BTCUSDT-1-365.txt, no MongoDB)
+# Default (BTCUSDT-1-365.txt, MongoDB enabled)
 java -cp bot-backtest/target/bot-backtest.jar com.tradingbot.backtest.runners.GridBotPermutationRunner
 
-# With trading pair (uses <PAIR>-1-365.txt)
+# With trading pair (uses <PAIR>-1-365.txt, MongoDB enabled)
 java -cp bot-backtest/target/bot-backtest.jar com.tradingbot.backtest.runners.GridBotPermutationRunner ETHUSDT
 
-# With custom file
+# With custom file (MongoDB enabled)
 java -cp bot-backtest/target/bot-backtest.jar com.tradingbot.backtest.runners.GridBotPermutationRunner BTCUSDT-5-90.txt
 
-# With MongoDB persistence
-java -cp bot-backtest/target/bot-backtest.jar com.tradingbot.backtest.runners.GridBotPermutationRunner BTCUSDT true
+# Disable MongoDB persistence
+java -cp bot-backtest/target/bot-backtest.jar com.tradingbot.backtest.runners.GridBotPermutationRunner BTCUSDT false
 ```
 
 **Parameter ranges** (default):
