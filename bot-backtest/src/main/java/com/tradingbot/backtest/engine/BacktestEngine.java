@@ -77,11 +77,24 @@ public class BacktestEngine {
         // Notify start
         notifySimulationStarted(algorithm.getName(), tradingPair, initialBalance);
 
+        // Progress tracking
+        int totalCandles = candles.size();
+        int processedCandles = 0;
+        int lastReportedPercent = 0;
+
         // Main simulation loop
         while (dataProvider.hasNext() || dataProvider.getCurrentIndex() == 0) {
             Candle currentCandle = dataProvider.getCurrentCandle();
             BigDecimal currentPrice = currentCandle.close();
             endTimestamp = currentCandle.timestamp();
+
+            // Progress logging (every 1%)
+            processedCandles++;
+            int currentPercent = (processedCandles * 100) / totalCandles;
+            if (currentPercent > lastReportedPercent && currentPercent % 1 == 0) {
+                log.info("Progress: {}% ({}/{})", currentPercent, processedCandles, totalCandles);
+                lastReportedPercent = currentPercent;
+            }
 
             // Update equity tracking
             portfolio.updateMaxEquity(currentPrice);
