@@ -131,13 +131,21 @@ public class ParallelSimulationExecutor {
     /**
      * Execute a single simulation task
      */
+    @SuppressWarnings("unchecked")
     private SimulationTask.Result executeTask(SimulationTask task) {
         long taskStart = System.currentTimeMillis();
 
         try {
+            // Create algorithm instance from config using reflection
+            com.tradingbot.core.algorithms.TradingAlgorithm algorithm =
+                (com.tradingbot.core.algorithms.TradingAlgorithm)
+                task.getAlgorithmClass()
+                    .getConstructor(task.getAlgorithmConfig().getClass())
+                    .newInstance(task.getAlgorithmConfig());
+
             // Pre-calculate indicators if TrendFollowing algorithm
             // This is done per-task to avoid memory issues with 1000+ configurations
-            if (task.getAlgorithm() instanceof com.tradingbot.algorithms.trendfollowing.TrendFollowingAlgorithm tfAlgorithm) {
+            if (algorithm instanceof com.tradingbot.algorithms.trendfollowing.TrendFollowingAlgorithm tfAlgorithm) {
                 tfAlgorithm.preCalculateIndicators(task.getCandles());
             }
 
@@ -153,16 +161,16 @@ public class ParallelSimulationExecutor {
 
             // Run simulation
             SimulationResult result = engine.runSimulation(
-                task.getAlgorithm(),
+                algorithm,
                 task.getCandles()
             );
 
             long executionTime = System.currentTimeMillis() - taskStart;
 
-            // Get algorithm config for persistence
-            Object algorithmConfig = task.getAlgorithm().getConfig();
+            // Algorithm is now eligible for GC (no longer referenced)
+            // Config is lightweight and safe to keep
 
-            return SimulationTask.Result.success(task.getTaskId(), result, algorithmConfig, executionTime);
+            return SimulationTask.Result.success(task.getTaskId(), result, task.getAlgorithmConfig(), executionTime);
 
         } catch (Exception e) {
             long executionTime = System.currentTimeMillis() - taskStart;

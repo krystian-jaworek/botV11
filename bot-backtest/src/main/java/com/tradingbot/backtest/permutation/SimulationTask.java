@@ -1,6 +1,6 @@
 package com.tradingbot.backtest.permutation;
 
-import com.tradingbot.core.algorithms.TradingAlgorithm;
+import com.tradingbot.core.algorithms.AlgorithmConfig;
 import com.tradingbot.core.metrics.SimulationResult;
 import com.tradingbot.core.models.Candle;
 import lombok.Builder;
@@ -11,13 +11,17 @@ import java.util.List;
 
 /**
  * Represents a single simulation task for parallel execution.
+ *
+ * NOTE: Does NOT store algorithm instances to avoid memory leaks.
+ * Algorithms are created on-demand in executeTask().
  */
 @Value
 @Builder
 public class SimulationTask {
     int taskId;
     String tradingPair;
-    TradingAlgorithm<?> algorithm;
+    AlgorithmConfig algorithmConfig;  // Changed from TradingAlgorithm to AlgorithmConfig
+    Class<?> algorithmClass;  // Class to instantiate (e.g., TrendFollowingAlgorithm.class)
     List<Candle> candles;
     BigDecimal initialBalance;
 
