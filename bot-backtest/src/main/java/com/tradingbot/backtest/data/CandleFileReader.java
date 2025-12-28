@@ -7,6 +7,8 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -88,6 +90,62 @@ public class CandleFileReader {
         }
 
         return readCandles(filePath);
+    }
+
+    /**
+     * Read candles from classpath resources.
+     * File should be in src/main/resources/ or src/test/resources/
+     *
+     * @param fileName Name of the file in resources (e.g., "BTCUSDT-1-365.txt")
+     * @return List of candles in chronological order
+     * @throws IOException if file cannot be read
+     */
+    public List<Candle> readCandlesFromClasspath(String fileName) throws IOException {
+        log.info("Reading candles from classpath: {}", fileName);
+
+        InputStream inputStream = getClass().getClassLoader().getResourceAsStream(fileName);
+
+        if (inputStream == null) {
+            throw new IOException("Candle file not found in classpath: " + fileName);
+        }
+
+        return readCandlesFromStream(inputStream, fileName);
+    }
+
+    /**
+     * Read candles from an input stream
+     */
+    private List<Candle> readCandlesFromStream(InputStream inputStream, String sourceName) throws IOException {
+        List<Candle> candles = new ArrayList<>();
+
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
+            String line;
+            int lineNumber = 0;
+
+            while ((line = reader.readLine()) != null) {
+                lineNumber++;
+
+                if (line.trim().isEmpty()) {
+                    continue; // Skip empty lines
+                }
+
+                try {
+                    Candle candle = objectMapper.readValue(line, Candle.class);
+                    candles.add(candle);
+                } catch (Exception e) {
+                    log.error("Failed to parse candle at line {}: {}", lineNumber, line, e);
+                    throw new IOException("Failed to parse candle at line " + lineNumber, e);
+                }
+            }
+        }
+
+        log.info("Loaded {} candles from {}", candles.size(), sourceName);
+
+        if (candles.isEmpty()) {
+            throw new IOException("No candles found in: " + sourceName);
+        }
+
+        return candles;
     }
 
     /**

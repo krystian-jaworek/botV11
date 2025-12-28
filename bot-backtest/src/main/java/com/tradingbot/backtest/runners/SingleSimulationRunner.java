@@ -18,10 +18,12 @@ import java.util.List;
 /**
  * Main runner for single simulation with hardcoded parameters.
  *
- * Usage: java -jar bot-backtest.jar <data-directory> <candle-file>
+ * Usage: java -jar bot-backtest.jar <candle-file>
  *
  * Example:
- *   java -jar bot-backtest.jar ./data BTCUSDT-1-365.txt
+ *   java -jar bot-backtest.jar BTCUSDT-1-365.txt
+ *
+ * The candle file should be placed in src/main/resources/ or src/test/resources/
  *
  * Hardcoded parameters (from requirements):
  * - 20 grid levels
@@ -36,17 +38,17 @@ public class SingleSimulationRunner {
     private static final BigDecimal INITIAL_CAPITAL = new BigDecimal("10000");
 
     public static void main(String[] args) {
-        if (args.length < 2) {
-            System.err.println("Usage: java -jar bot-backtest.jar <data-directory> <candle-file>");
-            System.err.println("Example: java -jar bot-backtest.jar ./data BTCUSDT-1-365.txt");
+        if (args.length < 1) {
+            System.err.println("Usage: java -jar bot-backtest.jar <candle-file>");
+            System.err.println("Example: java -jar bot-backtest.jar BTCUSDT-1-365.txt");
+            System.err.println("Note: Candle file should be in resources directory");
             System.exit(1);
         }
 
-        String dataDirectory = args[0];
-        String candleFileName = args[1];
+        String candleFileName = args[0];
 
         try {
-            runSimulation(dataDirectory, candleFileName);
+            runSimulation(candleFileName);
         } catch (Exception e) {
             log.error("Simulation failed", e);
             System.err.println("Simulation failed: " + e.getMessage());
@@ -55,9 +57,8 @@ public class SingleSimulationRunner {
         }
     }
 
-    private static void runSimulation(String dataDirectory, String candleFileName) throws IOException {
+    private static void runSimulation(String candleFileName) throws IOException {
         log.info("Starting single simulation");
-        log.info("Data directory: {}", dataDirectory);
         log.info("Candle file: {}", candleFileName);
 
         // Parse trading pair from file name
@@ -68,10 +69,9 @@ public class SingleSimulationRunner {
         log.info("Interval: {} minutes", metadata.intervalMinutes());
         log.info("Days: {}", metadata.days());
 
-        // Read candles
-        Path candleFilePath = Paths.get(dataDirectory, candleFileName);
+        // Read candles from classpath (resources)
         CandleFileReader reader = new CandleFileReader();
-        List<Candle> candles = reader.readCandles(candleFilePath);
+        List<Candle> candles = reader.readCandlesFromClasspath(candleFileName);
 
         log.info("Loaded {} candles", candles.size());
 

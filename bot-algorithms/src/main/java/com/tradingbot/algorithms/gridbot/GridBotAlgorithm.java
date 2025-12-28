@@ -4,6 +4,7 @@ import com.tradingbot.core.algorithms.AlgorithmState;
 import com.tradingbot.core.algorithms.TradingAlgorithm;
 import com.tradingbot.core.algorithms.TradingDecision;
 import com.tradingbot.core.models.Candle;
+import com.tradingbot.core.models.ClosedPosition;
 import com.tradingbot.core.models.OrderSide;
 import com.tradingbot.core.models.Portfolio;
 import com.tradingbot.core.models.Position;

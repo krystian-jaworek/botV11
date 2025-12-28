@@ -19,10 +19,12 @@ import java.util.List;
 /**
  * Main runner for permutation mode (parallel simulations with parameter sweeps).
  *
- * Usage: java -jar bot-backtest.jar permutation <data-directory> <candle-file> [save-to-mongodb]
+ * Usage: java -jar bot-backtest.jar permutation <candle-file> [save-to-mongodb]
  *
  * Example:
- *   java -jar bot-backtest.jar permutation ./data BTCUSDT-1-365.txt true
+ *   java -jar bot-backtest.jar permutation BTCUSDT-1-365.txt true
+ *
+ * The candle file should be placed in src/main/resources/
  *
  * Parameter ranges (default):
  * - Grid levels: 10-30 (step 5) = 5 values
@@ -37,18 +39,18 @@ public class PermutationRunner {
     private static final BigDecimal INITIAL_CAPITAL = new BigDecimal("10000");
 
     public static void main(String[] args) {
-        if (args.length < 3) {
-            System.err.println("Usage: java -jar bot-backtest.jar permutation <data-directory> <candle-file> [save-to-mongodb]");
-            System.err.println("Example: java -jar bot-backtest.jar permutation ./data BTCUSDT-1-365.txt true");
+        if (args.length < 2) {
+            System.err.println("Usage: java -jar bot-backtest.jar permutation <candle-file> [save-to-mongodb]");
+            System.err.println("Example: java -jar bot-backtest.jar permutation BTCUSDT-1-365.txt true");
+            System.err.println("Note: Candle file should be in resources directory");
             System.exit(1);
         }
 
-        String dataDirectory = args[1];  // args[0] is "permutation"
-        String candleFileName = args[2];
-        boolean saveToMongo = args.length > 3 && Boolean.parseBoolean(args[3]);
+        String candleFileName = args[1];  // args[0] is "permutation"
+        boolean saveToMongo = args.length > 2 && Boolean.parseBoolean(args[2]);
 
         try {
-            runPermutations(dataDirectory, candleFileName, saveToMongo);
+            runPermutations(candleFileName, saveToMongo);
         } catch (Exception e) {
             log.error("Permutation run failed", e);
             System.err.println("Permutation run failed: " + e.getMessage());
@@ -57,9 +59,8 @@ public class PermutationRunner {
         }
     }
 
-    private static void runPermutations(String dataDirectory, String candleFileName, boolean saveToMongo) throws Exception {
+    private static void runPermutations(String candleFileName, boolean saveToMongo) throws Exception {
         log.info("Starting permutation run");
-        log.info("Data directory: {}", dataDirectory);
         log.info("Candle file: {}", candleFileName);
         log.info("Save to MongoDB: {}", saveToMongo);
 
@@ -69,10 +70,9 @@ public class PermutationRunner {
 
         log.info("Trading pair: {}", tradingPair);
 
-        // Read candles
-        Path candleFilePath = Paths.get(dataDirectory, candleFileName);
+        // Read candles from classpath (resources)
         CandleFileReader reader = new CandleFileReader();
-        List<Candle> candles = reader.readCandles(candleFilePath);
+        List<Candle> candles = reader.readCandlesFromClasspath(candleFileName);
 
         log.info("Loaded {} candles", candles.size());
 
