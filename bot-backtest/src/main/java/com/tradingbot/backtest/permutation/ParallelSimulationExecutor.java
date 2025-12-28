@@ -147,6 +147,10 @@ public class ParallelSimulationExecutor {
                 task.getInitialBalance()
             );
 
+            // Disable candle progress logging for parallel execution
+            // (permutation progress is logged by ParallelSimulationExecutor)
+            engine.setEnableProgressLogging(false);
+
             // Run simulation
             SimulationResult result = engine.runSimulation(
                 task.getAlgorithm(),

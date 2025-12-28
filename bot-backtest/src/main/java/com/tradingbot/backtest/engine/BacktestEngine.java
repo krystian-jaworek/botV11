@@ -28,11 +28,21 @@ public class BacktestEngine {
     private final String tradingPair;
     private final BigDecimal initialBalance;
     private final List<SimulationEventListener> eventListeners;
+    private boolean enableProgressLogging;
 
     public BacktestEngine(String tradingPair, BigDecimal initialBalance) {
         this.tradingPair = tradingPair;
         this.initialBalance = initialBalance;
         this.eventListeners = new ArrayList<>();
+        this.enableProgressLogging = true;  // Enabled by default
+    }
+
+    /**
+     * Enable or disable progress logging (percentage of candles processed).
+     * Useful to disable when running many parallel simulations.
+     */
+    public void setEnableProgressLogging(boolean enabled) {
+        this.enableProgressLogging = enabled;
     }
 
     /**
@@ -89,11 +99,13 @@ public class BacktestEngine {
             endTimestamp = currentCandle.timestamp();
 
             // Progress logging (every 1%)
-            processedCandles++;
-            int currentPercent = (processedCandles * 100) / totalCandles;
-            if (currentPercent > lastReportedPercent && currentPercent % 1 == 0) {
-                log.info("Progress: {}% ({}/{})", currentPercent, processedCandles, totalCandles);
-                lastReportedPercent = currentPercent;
+            if (enableProgressLogging) {
+                processedCandles++;
+                int currentPercent = (processedCandles * 100) / totalCandles;
+                if (currentPercent > lastReportedPercent && currentPercent % 1 == 0) {
+                    log.info("Progress: {}% ({}/{})", currentPercent, processedCandles, totalCandles);
+                    lastReportedPercent = currentPercent;
+                }
             }
 
             // Update equity tracking
