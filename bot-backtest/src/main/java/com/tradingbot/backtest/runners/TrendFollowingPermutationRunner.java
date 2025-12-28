@@ -138,13 +138,15 @@ public class TrendFollowingPermutationRunner {
         log.info("  Stop Loss: {}", permutation.getStopLossPctRangeStr());
 
         // Create simulation tasks
+        // NOTE: Pre-calculation of indicators is deferred to ParallelSimulationExecutor
+        // to avoid OutOfMemoryError when creating 1000+ tasks
         List<SimulationTask> tasks = new ArrayList<>();
         for (int i = 0; i < configurations.size(); i++) {
             TrendFollowingConfig config = configurations.get(i);
             TrendFollowingAlgorithm algorithm = new TrendFollowingAlgorithm(config);
 
-            // Pre-calculate indicators BEFORE adding to task
-            algorithm.preCalculateIndicators(candles);
+            // DO NOT pre-calculate indicators here - will be done per-task during execution
+            // algorithm.preCalculateIndicators(candles);  // REMOVED to prevent OOM
 
             SimulationTask task = SimulationTask.builder()
                 .taskId(i)
@@ -157,7 +159,7 @@ public class TrendFollowingPermutationRunner {
             tasks.add(task);
         }
 
-        log.info("Created {} simulation tasks with pre-calculated indicators", tasks.size());
+        log.info("Created {} simulation tasks (indicators will be pre-calculated per-task)", tasks.size());
 
         // Setup MongoDB persistence if requested
         BatchResultsPersister persister = null;
