@@ -19,10 +19,23 @@ import java.util.List;
 /**
  * Main runner for permutation mode (parallel simulations with parameter sweeps).
  *
- * Usage: java -jar bot-backtest.jar permutation <candle-file> [save-to-mongodb]
+ * Usage: java -jar bot-backtest.jar permutation [candle-file] [save-to-mongodb]
  *
- * Example:
+ * Examples:
+ *   java -jar bot-backtest.jar permutation
+ *     → Uses default: BTCUSDT-1-365.txt, no MongoDB
+ *
+ *   java -jar bot-backtest.jar permutation ETHUSDT
+ *     → Uses ETHUSDT-1-365.txt, no MongoDB
+ *
+ *   java -jar bot-backtest.jar permutation BTCUSDT-5-90.txt
+ *     → Uses custom file, no MongoDB
+ *
+ *   java -jar bot-backtest.jar permutation BTCUSDT true
+ *     → Uses BTCUSDT-1-365.txt, saves to MongoDB
+ *
  *   java -jar bot-backtest.jar permutation BTCUSDT-1-365.txt true
+ *     → Uses custom file, saves to MongoDB
  *
  * The candle file should be placed in src/main/resources/
  *
@@ -37,16 +50,11 @@ import java.util.List;
 public class PermutationRunner {
 
     private static final BigDecimal INITIAL_CAPITAL = new BigDecimal("10000");
+    private static final String DEFAULT_CANDLE_FILE = "BTCUSDT-1-365.txt";
 
     public static void main(String[] args) {
-        if (args.length < 2) {
-            System.err.println("Usage: java -jar bot-backtest.jar permutation <candle-file> [save-to-mongodb]");
-            System.err.println("Example: java -jar bot-backtest.jar permutation BTCUSDT-1-365.txt true");
-            System.err.println("Note: Candle file should be in resources directory");
-            System.exit(1);
-        }
-
-        String candleFileName = args[1];  // args[0] is "permutation"
+        // args[0] is "permutation", args[1] is candle file (optional), args[2] is save flag (optional)
+        String candleFileName = resolveCandleFileName(args);
         boolean saveToMongo = args.length > 2 && Boolean.parseBoolean(args[2]);
 
         try {
@@ -57,6 +65,33 @@ public class PermutationRunner {
             e.printStackTrace();
             System.exit(1);
         }
+    }
+
+    /**
+     * Resolves the candle file name based on command line arguments.
+     *
+     * @param args Command line arguments where args[0] is "permutation"
+     * @return The resolved candle file name
+     */
+    private static String resolveCandleFileName(String[] args) {
+        // args.length == 1: just "permutation" → use default
+        if (args.length == 1) {
+            log.info("No candle file provided, using default: {}", DEFAULT_CANDLE_FILE);
+            return DEFAULT_CANDLE_FILE;
+        }
+
+        // args.length >= 2: args[1] contains file or trading pair
+        String input = args[1];
+
+        // If it ends with .txt, it's a full filename
+        if (input.endsWith(".txt")) {
+            return input;
+        }
+
+        // Otherwise, it's a trading pair - append -1-365.txt
+        String fileName = input + "-1-365.txt";
+        log.info("Trading pair provided, using: {}", fileName);
+        return fileName;
     }
 
     private static void runPermutations(String candleFileName, boolean saveToMongo) throws Exception {
