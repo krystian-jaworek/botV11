@@ -51,16 +51,22 @@ File naming convention: `<PAIR>-<INTERVAL_MINUTES>-<DAYS>.txt`
 - Portfolio state after each action
 - Final metrics summary (profit, drawdown, etc.)
 
-### 2. Permutation Mode (Parameter Optimization)
+### 2. GridBot Permutation Mode (Parameter Optimization)
 
-Run 300 parallel simulations with different parameter combinations:
+Run 300 parallel GridBot simulations with different parameter combinations:
 
 ```bash
-# Without MongoDB persistence
-java -jar bot-backtest/target/bot-backtest.jar permutation BTCUSDT-1-1.txt false
+# Default (BTCUSDT-1-365.txt, no MongoDB)
+java -cp bot-backtest/target/bot-backtest.jar com.tradingbot.backtest.runners.GridBotPermutationRunner
+
+# With trading pair (uses <PAIR>-1-365.txt)
+java -cp bot-backtest/target/bot-backtest.jar com.tradingbot.backtest.runners.GridBotPermutationRunner ETHUSDT
+
+# With custom file
+java -cp bot-backtest/target/bot-backtest.jar com.tradingbot.backtest.runners.GridBotPermutationRunner BTCUSDT-5-90.txt
 
 # With MongoDB persistence
-java -jar bot-backtest/target/bot-backtest.jar permutation BTCUSDT-1-1.txt true
+java -cp bot-backtest/target/bot-backtest.jar com.tradingbot.backtest.runners.GridBotPermutationRunner BTCUSDT true
 ```
 
 **Parameter ranges** (default):
