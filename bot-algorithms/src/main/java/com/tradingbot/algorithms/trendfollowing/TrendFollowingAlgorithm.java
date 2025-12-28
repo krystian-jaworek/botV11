@@ -568,7 +568,7 @@ public class TrendFollowingAlgorithm implements TradingAlgorithm<TrendFollowingC
 
     private BigDecimal calculatePositionSize(Portfolio portfolio, BigDecimal currentPrice) {
         BigDecimal baseCapital = config.isUseAvailableEquity()
-            ? portfolio.getEquity()
+            ? portfolio.getEquity(currentPrice)
             : initialBalance;
 
         BigDecimal positionValue = baseCapital.multiply(
