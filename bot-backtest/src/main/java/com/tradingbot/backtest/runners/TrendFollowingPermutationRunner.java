@@ -17,7 +17,7 @@ import java.util.List;
 /**
  * TrendFollowing-specific permutation runner for parallel parameter sweep simulations.
  *
- * Runs ~1000 TrendFollowing simulations with different parameter combinations using Virtual Threads.
+ * Runs ~768 TrendFollowing simulations with different parameter combinations using Virtual Threads.
  *
  * Usage: [candle-file] [save-to-mongodb]
  *
@@ -32,31 +32,36 @@ import java.util.List;
  *     → Uses custom file, MongoDB enabled (default)
  *
  *   BTCUSDT false
- *     → Uses BTCUSDT-1-365.txt, MongoDB disabled
+ *     → Uses BTCUSDT-1-365.txt, MongoDB DISABLED (recommended for testing)
  *
  *   BTCUSDT-1-365.txt false
- *     → Uses custom file, MongoDB disabled
+ *     → Uses custom file, MongoDB DISABLED
  *
- * Note: MongoDB persistence is ENABLED by default. Use 'false' as second argument to disable.
+ * IMPORTANT - Memory Configuration:
+ *   If running with MongoDB enabled (large datasets), you may need to increase JVM heap:
+ *     java -Xmx4g -jar bot-backtest.jar TrendFollowingPermutationRunner BTCUSDT
+ *
+ *   For testing without MongoDB (faster, less memory):
+ *     java -jar bot-backtest.jar TrendFollowingPermutationRunner BTCUSDT false
+ *
+ * Note: MongoDB batch size is set to 50 results per flush to prevent OOM.
  *
  * The candle file should be placed in src/main/resources/
  *
- * TrendFollowing parameter ranges (reduced to ~1000):
+ * TrendFollowing parameter ranges (reduced to ~768):
  * - EMA fast primary: 50, 100 (2 values)
- * - EMA slow primary: 150, 200, 250 (3 values)
+ * - EMA slow primary: 150, 200 (2 values) - REDUCED
  * - EMA fast secondary: 20, 30 (2 values)
  * - EMA slow secondary: 50, 100 (2 values)
- * - MACD fast: 12, 16 (2 values)
- * - MACD slow: 26, 32 (2 values)
- * - MACD signal: 9, 12 (2 values)
- * - Higher lows periods: 3, 4, 5 (3 values)
+ * - MACD: 12/26/9 (1 combination) - FIXED to defaults
+ * - Higher lows periods: 3, 4 (2 values) - REDUCED
  * - Swing detection: 5, 7 (2 values)
  * - Histogram growth: 2, 3 (2 values)
  * - TP options: 2 (conservative, aggressive)
  * - Stop loss: 15%, 20%, 25% (3 values)
- * - Trailing activation: 50%, 75% (2 values)
- * - Trailing distance: 20%, 25% (2 values)
- * Total: ~1000 valid combinations
+ * - Trailing activation: 50% (1 value) - FIXED
+ * - Trailing distance: 20% (1 value) - FIXED
+ * Total: 4 × 4 × 1 × 4 × 2 × 2 × 3 × 1 = 768 valid combinations
  */
 @Slf4j
 public class TrendFollowingPermutationRunner {
@@ -170,9 +175,18 @@ public class TrendFollowingPermutationRunner {
             context.refresh();
 
             DynamicSimulationResultRepository repository = context.getBean(DynamicSimulationResultRepository.class);
-            persister = new BatchResultsPersister(repository);
 
-            log.info("MongoDB persistence enabled (collection: TrendFollowing-{})", tradingPair);
+            // REDUCED batch size to prevent OOM in MongoDB driver
+            // With 768 parallel simulations, smaller batches are safer
+            persister = new BatchResultsPersister(
+                repository,
+                50,   // Batch size: flush every 50 results (was 1000)
+                5     // Flush interval: 5 seconds (was 10)
+            );
+
+            log.info("MongoDB persistence enabled (collection: TrendFollowing-{}, batchSize: 50)", tradingPair);
+        } else {
+            log.info("MongoDB persistence DISABLED - results will only be kept in memory");
         }
 
         // Create parallel executor
