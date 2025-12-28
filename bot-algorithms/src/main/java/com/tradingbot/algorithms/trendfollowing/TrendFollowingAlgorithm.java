@@ -340,7 +340,7 @@ public class TrendFollowingAlgorithm implements TradingAlgorithm<TrendFollowingC
             tpPrices
         );
 
-        log.info("✅ ENTRY SIGNAL - Opening LONG position at {} (qty: {}, TPs: {})",
+        log.debug("✅ ENTRY SIGNAL - Opening LONG position at {} (qty: {}, TPs: {})",
             entryPrice, quantity, tpPrices);
 
         return new TradingDecision.OpenPosition(
@@ -417,7 +417,7 @@ public class TrendFollowingAlgorithm implements TradingAlgorithm<TrendFollowingC
         );
 
         if (currentPrice.compareTo(stopLossPrice) <= 0) {
-            log.info("🛑 STOP LOSS HIT - Closing position at {} (SL: {})", currentPrice, stopLossPrice);
+            log.debug("🛑 STOP LOSS HIT - Closing position at {} (SL: {})", currentPrice, stopLossPrice);
             return new TradingDecision.ClosePosition(state.getCurrentPositionId(), currentPrice);
         }
 
@@ -430,7 +430,7 @@ public class TrendFollowingAlgorithm implements TradingAlgorithm<TrendFollowingC
         }
 
         if (currentPrice.compareTo(state.getTrailingStopPrice()) <= 0) {
-            log.info("📉 TRAILING STOP HIT - Closing position at {} (TS: {})",
+            log.debug("📉 TRAILING STOP HIT - Closing position at {} (TS: {})",
                 currentPrice, state.getTrailingStopPrice());
             return new TradingDecision.ClosePosition(state.getCurrentPositionId(), currentPrice);
         }
@@ -444,7 +444,7 @@ public class TrendFollowingAlgorithm implements TradingAlgorithm<TrendFollowingC
             state.getEmaSlowPrimary(),
             currentIndex
         )) {
-            log.info("💀 DEATH CROSS - Closing position at index {}", currentIndex);
+            log.debug("💀 DEATH CROSS - Closing position at index {}", currentIndex);
             return new TradingDecision.ClosePosition(
                 state.getCurrentPositionId(),
                 primaryCandles.get(currentIndex).close()
@@ -481,7 +481,7 @@ public class TrendFollowingAlgorithm implements TradingAlgorithm<TrendFollowingC
 
                 String reason = String.format("TP%d (%.1f%%)", i + 1, config.getTargetProfitPct().get(i));
 
-                log.info("🎯 TAKE PROFIT {} - Closing {}/{} at {} (target: {})",
+                log.debug("🎯 TAKE PROFIT {} - Closing {}/{} at {} (target: {})",
                     reason, quantityToClose, state.getInitialQuantity(), currentPrice, tpPrice);
 
                 state.markTpLevelHit(i);
@@ -516,7 +516,7 @@ public class TrendFollowingAlgorithm implements TradingAlgorithm<TrendFollowingC
             state.setTrailingStopPrice(trailingPrice);
             state.setTrailingStopActive(true);
 
-            log.info("🔔 Trailing stop ACTIVATED at {} (distance: {}%, activation profit: {}%)",
+            log.debug("🔔 Trailing stop ACTIVATED at {} (distance: {}%, activation profit: {}%)",
                 trailingPrice, config.getTrailingStopDistancePct(), profitPct);
         }
 
@@ -558,7 +558,7 @@ public class TrendFollowingAlgorithm implements TradingAlgorithm<TrendFollowingC
                 BigDecimal newTpPrice = trailingPrice.multiply(buffer);
                 state.updateDynamicTpPrice(i, newTpPrice);
 
-                log.info("📈 DYNAMIC TP ADJUSTMENT - TP{} moved from {} to {} (trailing: {})",
+                log.debug("📈 DYNAMIC TP ADJUSTMENT - TP{} moved from {} to {} (trailing: {})",
                     i + 1, currentTpPrice, newTpPrice, trailingPrice);
             }
         }
@@ -611,7 +611,7 @@ public class TrendFollowingAlgorithm implements TradingAlgorithm<TrendFollowingC
             log.debug("Partial close processed: {} remaining",
                 state.getRemainingQuantity());
         } else {
-            log.info("Position fully closed. Profit: {} ({}%)",
+            log.debug("Position fully closed. Profit: {} ({}%)",
                 closedPosition.getRealizedProfit(),
                 closedPosition.getRealizedProfitPct());
             state.resetPosition();
