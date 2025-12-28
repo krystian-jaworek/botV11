@@ -171,6 +171,21 @@ public class BacktestEngine {
                     log.warn("Attempted to close non-existent position: {}", close.positionId());
                 }
             }
+            case TradingDecision.ClosePositionPartial partial -> {
+                Position position = portfolio.getOpenPositions().get(partial.positionId());
+                if (position != null) {
+                    ClosedPosition closedPosition = executor.closePartialPosition(
+                        position,
+                        partial.quantity(),
+                        partial.price(),
+                        currentCandle.timestamp()
+                    );
+                    algorithm.onPositionClosed(closedPosition);
+                    notifyPositionClosed(closedPosition, currentCandle, portfolio);
+                } else {
+                    log.warn("Attempted to partially close non-existent position: {}", partial.positionId());
+                }
+            }
             case TradingDecision.Hold hold -> {
                 // No action needed
             }

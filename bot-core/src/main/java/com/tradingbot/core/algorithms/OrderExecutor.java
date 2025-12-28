@@ -33,7 +33,7 @@ public interface OrderExecutor {
     }
 
     /**
-     * Close an existing position.
+     * Close an existing position (fully).
      *
      * @param position Position to close
      * @param closePrice Execution price
@@ -41,4 +41,22 @@ public interface OrderExecutor {
      * @return Closed position with realized PnL
      */
     ClosedPosition closePosition(Position position, BigDecimal closePrice, long timestamp);
+
+    /**
+     * Close part of an existing position.
+     *
+     * @param position Position to partially close
+     * @param quantityToClose Amount to close (not the full position)
+     * @param closePrice Execution price
+     * @param timestamp Execution timestamp
+     * @return ClosedPosition representing the partial close
+     */
+    default ClosedPosition closePartialPosition(
+        Position position,
+        BigDecimal quantityToClose,
+        BigDecimal closePrice,
+        long timestamp
+    ) {
+        throw new UnsupportedOperationException("Partial position closing not supported by this executor");
+    }
 }

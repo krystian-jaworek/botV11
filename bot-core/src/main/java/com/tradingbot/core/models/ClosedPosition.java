@@ -23,8 +23,13 @@ public class ClosedPosition {
     long closeTimestamp;
     String metadata;
 
+    // Partial close tracking
+    @Builder.Default
+    boolean isPartialClose = false;
+    BigDecimal remainingQuantity;  // Remaining quantity in the still-open position
+
     /**
-     * Create from an open position
+     * Create from an open position (full close)
      */
     public static ClosedPosition fromPosition(Position position, BigDecimal exitPrice, long closeTimestamp) {
         return ClosedPosition.builder()
@@ -36,6 +41,32 @@ public class ClosedPosition {
             .openTimestamp(position.getOpenTimestamp())
             .closeTimestamp(closeTimestamp)
             .metadata(position.getMetadata())
+            .isPartialClose(false)
+            .remainingQuantity(BigDecimal.ZERO)
+            .build();
+    }
+
+    /**
+     * Create from a partial close
+     */
+    public static ClosedPosition fromPartialClose(
+        Position position,
+        BigDecimal closedQuantity,
+        BigDecimal exitPrice,
+        long closeTimestamp,
+        BigDecimal remainingQuantity
+    ) {
+        return ClosedPosition.builder()
+            .id(position.getId())
+            .side(position.getSide())
+            .entryPrice(position.getEntryPrice())
+            .exitPrice(exitPrice)
+            .quantity(closedQuantity)
+            .openTimestamp(position.getOpenTimestamp())
+            .closeTimestamp(closeTimestamp)
+            .metadata(position.getMetadata())
+            .isPartialClose(true)
+            .remainingQuantity(remainingQuantity)
             .build();
     }
 
@@ -65,6 +96,20 @@ public class ClosedPosition {
 
         return pnl.divide(initialValue, 6, RoundingMode.HALF_UP)
                   .multiply(BigDecimal.valueOf(100));
+    }
+
+    /**
+     * Alias for getRealizedPnL() for consistency with different algorithms
+     */
+    public BigDecimal getRealizedProfit() {
+        return getRealizedPnL();
+    }
+
+    /**
+     * Alias for getRealizedPnLPercentage() for consistency with different algorithms
+     */
+    public BigDecimal getRealizedProfitPct() {
+        return getRealizedPnLPercentage();
     }
 
     /**

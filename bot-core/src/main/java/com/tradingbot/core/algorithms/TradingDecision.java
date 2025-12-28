@@ -25,11 +25,22 @@ public sealed interface TradingDecision {
     }
 
     /**
-     * Decision to close an existing position
+     * Decision to close an existing position (fully)
      */
     record ClosePosition(
         String positionId,
         BigDecimal price
+    ) implements TradingDecision {}
+
+    /**
+     * Decision to close part of an existing position.
+     * Used for partial take profit strategies.
+     */
+    record ClosePositionPartial(
+        String positionId,
+        BigDecimal quantity,  // Quantity to close (not the entire position)
+        BigDecimal price,
+        String reason  // Reason for partial close (e.g., "TP1", "TP2")
     ) implements TradingDecision {}
 
     /**

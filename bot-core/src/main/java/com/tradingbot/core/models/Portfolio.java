@@ -62,7 +62,7 @@ public class Portfolio {
     }
 
     /**
-     * Close a position and add cash from proceeds
+     * Close a position (fully) and add cash from proceeds
      */
     public ClosedPosition closePosition(String positionId, BigDecimal exitPrice, long closeTimestamp) {
         Position position = openPositions.remove(positionId);
@@ -79,6 +79,84 @@ public class Portfolio {
         closedPositions.add(closedPosition);
 
         updateMaxCashBalance();
+        return closedPosition;
+    }
+
+    /**
+     * Close part of a position and add partial proceeds to cash.
+     * The position remains open with reduced quantity.
+     *
+     * @param positionId Position to partially close
+     * @param quantityToClose How much to close
+     * @param exitPrice Exit price
+     * @param closeTimestamp Timestamp of close
+     * @return ClosedPosition representing the partial close
+     */
+    public ClosedPosition closePartialPosition(
+        String positionId,
+        BigDecimal quantityToClose,
+        BigDecimal exitPrice,
+        long closeTimestamp
+    ) {
+        Position position = openPositions.get(positionId);
+        if (position == null) {
+            throw new IllegalArgumentException("Position not found: " + positionId);
+        }
+
+        if (quantityToClose.compareTo(position.getQuantity()) > 0) {
+            throw new IllegalArgumentException(
+                String.format("Cannot close more than available: %s > %s",
+                    quantityToClose, position.getQuantity())
+            );
+        }
+
+        // Calculate proceeds for the closed portion
+        BigDecimal portionProceeds;
+        if (position.getSide() == OrderSide.LONG) {
+            portionProceeds = quantityToClose.multiply(exitPrice);
+        } else {
+            // SHORT: return portion of initial margin + portion of PnL
+            BigDecimal initialCost = quantityToClose.multiply(position.getEntryPrice());
+            BigDecimal portionPnL = quantityToClose.multiply(exitPrice.subtract(position.getEntryPrice()));
+            if (position.getSide() == OrderSide.SHORT) {
+                portionPnL = portionPnL.negate();
+            }
+            portionProceeds = initialCost.add(portionPnL);
+        }
+
+        cashBalance = cashBalance.add(portionProceeds);
+
+        // Update position with reduced quantity
+        BigDecimal remainingQuantity = position.getQuantity().subtract(quantityToClose);
+
+        if (remainingQuantity.compareTo(BigDecimal.ZERO) <= 0) {
+            // Closing the last portion - remove position entirely
+            openPositions.remove(positionId);
+        } else {
+            // Update position quantity
+            Position updatedPosition = new Position(
+                position.getId(),
+                position.getSide(),
+                remainingQuantity,
+                position.getEntryPrice(),
+                position.getOpenTimestamp(),
+                position.getMetadata()
+            );
+            openPositions.put(positionId, updatedPosition);
+        }
+
+        // Create ClosedPosition record for this partial close
+        ClosedPosition closedPosition = ClosedPosition.fromPartialClose(
+            position,
+            quantityToClose,
+            exitPrice,
+            closeTimestamp,
+            remainingQuantity
+        );
+
+        closedPositions.add(closedPosition);
+        updateMaxCashBalance();
+
         return closedPosition;
     }
 

@@ -50,4 +50,31 @@ public class MockOrderExecutor implements OrderExecutor {
 
         return closedPosition;
     }
+
+    @Override
+    public ClosedPosition closePartialPosition(
+        Position position,
+        BigDecimal quantityToClose,
+        BigDecimal closePrice,
+        long timestamp
+    ) {
+        // Close partial position in portfolio
+        ClosedPosition closedPosition = portfolio.closePartialPosition(
+            position.getId(),
+            quantityToClose,
+            closePrice,
+            timestamp
+        );
+
+        log.debug("Partially closed position: {} - closed {}/{} with PnL: {} ({}%), remaining: {}",
+            closedPosition.getId().substring(0, 8),
+            quantityToClose,
+            position.getQuantity(),
+            closedPosition.getRealizedPnL(),
+            closedPosition.getRealizedPnLPercentage(),
+            closedPosition.getRemainingQuantity()
+        );
+
+        return closedPosition;
+    }
 }
