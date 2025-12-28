@@ -98,8 +98,20 @@ public class TrendFollowingConfig implements AlgorithmConfig {
     }
 
     @Override
-    public String getAlgorithmName() {
-        return "TrendFollowing";
+    public String getConfigId() {
+        return String.format(
+            "TrendFollowing[TF:%s/%s,EMA:%d/%d,MACD:%d/%d/%d,HL:%d,TP:%s,SL:%.0f%%]",
+            primaryTimeframe,
+            secondaryTimeframe,
+            emaFastPrimary,
+            emaSlowPrimary,
+            macdFast,
+            macdSlow,
+            macdSignal,
+            higherLowsPeriods,
+            targetProfitPct.size(),
+            stopLossPct
+        );
     }
 
     @Override

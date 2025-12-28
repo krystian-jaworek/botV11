@@ -23,7 +23,7 @@ import java.util.Set;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class TrendFollowingState implements AlgorithmState {
+public class TrendFollowingState {
 
     // ========== Indicator Caches (Primary Timeframe) ==========
     @Builder.Default
@@ -157,11 +157,6 @@ public class TrendFollowingState implements AlgorithmState {
         if (level >= 0 && level < dynamicTpPrices.size()) {
             dynamicTpPrices.set(level, newPrice);
         }
-    }
-
-    @Override
-    public String getAlgorithmName() {
-        return "TrendFollowing";
     }
 
     @Override

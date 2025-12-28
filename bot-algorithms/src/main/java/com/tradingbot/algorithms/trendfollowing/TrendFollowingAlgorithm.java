@@ -58,34 +58,97 @@ public class TrendFollowingAlgorithm implements TradingAlgorithm<TrendFollowingC
 
     @Override
     public AlgorithmState getState() {
-        return state;
+        AlgorithmState algorithmState = AlgorithmState.builder()
+            .algorithmName(getName())
+            .lastUpdateTimestamp(System.currentTimeMillis())
+            .build();
+
+        // Save position tracking (indicators are pre-calculated, no need to persist)
+        algorithmState.putState("currentPositionId", state.getCurrentPositionId());
+        if (state.getEntryPrice() != null) {
+            algorithmState.putState("entryPrice", state.getEntryPrice().toString());
+        }
+        if (state.getInitialQuantity() != null) {
+            algorithmState.putState("initialQuantity", state.getInitialQuantity().toString());
+        }
+        if (state.getRemainingQuantity() != null) {
+            algorithmState.putState("remainingQuantity", state.getRemainingQuantity().toString());
+        }
+        algorithmState.putState("tpLevelsHit", new ArrayList<>(state.getTpLevelsHit()));
+
+        // Dynamic TP prices
+        List<String> tpPriceStrings = new ArrayList<>();
+        for (BigDecimal tp : state.getDynamicTpPrices()) {
+            tpPriceStrings.add(tp.toString());
+        }
+        algorithmState.putState("dynamicTpPrices", tpPriceStrings);
+
+        // Trailing stop
+        if (state.getTrailingStopPrice() != null) {
+            algorithmState.putState("trailingStopPrice", state.getTrailingStopPrice().toString());
+        }
+        algorithmState.putState("trailingStopActive", state.isTrailingStopActive());
+        if (state.getHighestPriceSinceEntry() != null) {
+            algorithmState.putState("highestPriceSinceEntry", state.getHighestPriceSinceEntry().toString());
+        }
+
+        return algorithmState;
     }
 
     @Override
     public void restoreState(AlgorithmState algorithmState) {
-        if (!(algorithmState instanceof TrendFollowingState restoredState)) {
-            throw new IllegalArgumentException("Invalid state type for TrendFollowing algorithm");
+        log.info("Restoring TrendFollowing state");
+
+        // Restore position tracking
+        state.setCurrentPositionId((String) algorithmState.getStateData().get("currentPositionId"));
+
+        String entryPriceStr = (String) algorithmState.getStateData().get("entryPrice");
+        if (entryPriceStr != null) {
+            state.setEntryPrice(new BigDecimal(entryPriceStr));
         }
 
-        // Deep copy state
-        state.setEmaFastPrimary(new ArrayList<>(restoredState.getEmaFastPrimary()));
-        state.setEmaSlowPrimary(new ArrayList<>(restoredState.getEmaSlowPrimary()));
-        state.setMacdPrimary(new ArrayList<>(restoredState.getMacdPrimary()));
-        state.setSwingLowsPrimary(new ArrayList<>(restoredState.getSwingLowsPrimary()));
+        String initialQtyStr = (String) algorithmState.getStateData().get("initialQuantity");
+        if (initialQtyStr != null) {
+            state.setInitialQuantity(new BigDecimal(initialQtyStr));
+        }
 
-        state.setEmaFastSecondary(new ArrayList<>(restoredState.getEmaFastSecondary()));
-        state.setEmaSlowSecondary(new ArrayList<>(restoredState.getEmaSlowSecondary()));
-        state.setMacdSecondary(new ArrayList<>(restoredState.getMacdSecondary()));
+        String remainingQtyStr = (String) algorithmState.getStateData().get("remainingQuantity");
+        if (remainingQtyStr != null) {
+            state.setRemainingQuantity(new BigDecimal(remainingQtyStr));
+        }
 
-        state.setCurrentPositionId(restoredState.getCurrentPositionId());
-        state.setEntryPrice(restoredState.getEntryPrice());
-        state.setInitialQuantity(restoredState.getInitialQuantity());
-        state.setRemainingQuantity(restoredState.getRemainingQuantity());
-        state.setTpLevelsHit(new java.util.HashSet<>(restoredState.getTpLevelsHit()));
-        state.setDynamicTpPrices(new ArrayList<>(restoredState.getDynamicTpPrices()));
-        state.setTrailingStopPrice(restoredState.getTrailingStopPrice());
-        state.setTrailingStopActive(restoredState.isTrailingStopActive());
-        state.setHighestPriceSinceEntry(restoredState.getHighestPriceSinceEntry());
+        @SuppressWarnings("unchecked")
+        List<Integer> tpHitList = (List<Integer>) algorithmState.getStateData().get("tpLevelsHit");
+        if (tpHitList != null) {
+            state.setTpLevelsHit(new java.util.HashSet<>(tpHitList));
+        }
+
+        // Dynamic TP prices
+        @SuppressWarnings("unchecked")
+        List<String> tpPriceStrings = (List<String>) algorithmState.getStateData().get("dynamicTpPrices");
+        if (tpPriceStrings != null) {
+            List<BigDecimal> tpPrices = new ArrayList<>();
+            for (String tpStr : tpPriceStrings) {
+                tpPrices.add(new BigDecimal(tpStr));
+            }
+            state.setDynamicTpPrices(tpPrices);
+        }
+
+        // Trailing stop
+        String trailingStr = (String) algorithmState.getStateData().get("trailingStopPrice");
+        if (trailingStr != null) {
+            state.setTrailingStopPrice(new BigDecimal(trailingStr));
+        }
+
+        Boolean trailingActive = (Boolean) algorithmState.getStateData().get("trailingStopActive");
+        if (trailingActive != null) {
+            state.setTrailingStopActive(trailingActive);
+        }
+
+        String highestStr = (String) algorithmState.getStateData().get("highestPriceSinceEntry");
+        if (highestStr != null) {
+            state.setHighestPriceSinceEntry(new BigDecimal(highestStr));
+        }
 
         log.info("TrendFollowing state restored: {}", state);
     }
