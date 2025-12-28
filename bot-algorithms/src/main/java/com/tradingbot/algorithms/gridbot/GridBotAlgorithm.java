@@ -56,7 +56,7 @@ public class GridBotAlgorithm implements TradingAlgorithm<GridBotConfig> {
 
     @Override
     public void initialize(BigDecimal initialPrice) {
-        log.info("Initializing GridBot with price: {}", initialPrice);
+        log.debug("Initializing GridBot with price: {}", initialPrice);
 
         // Calculate grid levels
         gridLevels = new BigDecimal[config.getGridLevels()];
@@ -73,7 +73,7 @@ public class GridBotAlgorithm implements TradingAlgorithm<GridBotConfig> {
             log.debug("Grid level {}: {}", i, gridLevels[i]);
         }
 
-        log.info("Grid initialized with {} levels from {} to {}",
+        log.debug("Grid initialized with {} levels from {} to {}",
             config.getGridLevels(), gridLevels[0], gridLevels[config.getGridLevels() - 1]);
     }
 

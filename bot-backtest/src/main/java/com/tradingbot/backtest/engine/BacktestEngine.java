@@ -50,7 +50,7 @@ public class BacktestEngine {
      * @return Simulation results with metrics
      */
     public SimulationResult runSimulation(TradingAlgorithm<?> algorithm, List<Candle> candles) {
-        log.info("Starting backtest for {} on {} with {} candles",
+        log.debug("Starting backtest for {} on {} with {} candles",
             algorithm.getName(), tradingPair, candles.size());
 
         // Initialize components
@@ -131,7 +131,7 @@ public class BacktestEngine {
             interruptionReason
         );
 
-        log.info("Backtest completed. Profit: {} ({}%)",
+        log.debug("Backtest completed. Profit: {} ({}%)",
             result.getProfitAbsolute(), result.getProfitPercentage());
 
         notifySimulationCompleted(result);
