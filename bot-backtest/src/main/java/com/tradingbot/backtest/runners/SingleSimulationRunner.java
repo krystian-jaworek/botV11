@@ -18,12 +18,15 @@ import java.util.List;
 /**
  * Main runner for single simulation with hardcoded parameters.
  *
- * Usage: java -jar bot-backtest.jar <candle-file>
+ * Usage: java -jar bot-backtest.jar [trading-pair|candle-file]
  *
- * Example:
- *   java -jar bot-backtest.jar BTCUSDT-1-365.txt
+ * Examples:
+ *   java -jar bot-backtest.jar                    # Uses default: BTCUSDT-1-365.txt
+ *   java -jar bot-backtest.jar BTCUSDT            # Uses: BTCUSDT-1-365.txt
+ *   java -jar bot-backtest.jar ETHUSDT            # Uses: ETHUSDT-1-365.txt
+ *   java -jar bot-backtest.jar BTCUSDT-5-90.txt   # Uses: BTCUSDT-5-90.txt (custom)
  *
- * The candle file should be placed in src/main/resources/ or src/test/resources/
+ * The candle file should be placed in src/main/resources/
  *
  * Hardcoded parameters (from requirements):
  * - 20 grid levels
@@ -36,16 +39,10 @@ import java.util.List;
 public class SingleSimulationRunner {
 
     private static final BigDecimal INITIAL_CAPITAL = new BigDecimal("10000");
+    private static final String DEFAULT_CANDLE_FILE = "BTCUSDT-1-365.txt";
 
     public static void main(String[] args) {
-        if (args.length < 1) {
-            System.err.println("Usage: java -jar bot-backtest.jar <candle-file>");
-            System.err.println("Example: java -jar bot-backtest.jar BTCUSDT-1-365.txt");
-            System.err.println("Note: Candle file should be in resources directory");
-            System.exit(1);
-        }
-
-        String candleFileName = args[0];
+        String candleFileName = resolveCandleFileName(args);
 
         try {
             runSimulation(candleFileName);
@@ -55,6 +52,31 @@ public class SingleSimulationRunner {
             e.printStackTrace();
             System.exit(1);
         }
+    }
+
+    /**
+     * Resolve candle file name from arguments.
+     * - No args: BTCUSDT-1-365.txt
+     * - Trading pair (e.g., "BTCUSDT"): BTCUSDT-1-365.txt
+     * - Full file name (e.g., "BTCUSDT-5-90.txt"): as is
+     */
+    private static String resolveCandleFileName(String[] args) {
+        if (args.length == 0) {
+            log.info("No arguments provided, using default: {}", DEFAULT_CANDLE_FILE);
+            return DEFAULT_CANDLE_FILE;
+        }
+
+        String input = args[0];
+
+        // If already ends with .txt, use as is
+        if (input.endsWith(".txt")) {
+            return input;
+        }
+
+        // Otherwise, assume it's a trading pair and append -1-365.txt
+        String fileName = input + "-1-365.txt";
+        log.info("Trading pair provided, using: {}", fileName);
+        return fileName;
     }
 
     private static void runSimulation(String candleFileName) throws IOException {
