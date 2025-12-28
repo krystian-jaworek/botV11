@@ -4,7 +4,7 @@ import com.tradingbot.algorithms.trendfollowing.TrendFollowingAlgorithm;
 import com.tradingbot.algorithms.trendfollowing.TrendFollowingConfig;
 import com.tradingbot.backtest.data.CandleFileReader;
 import com.tradingbot.backtest.engine.BacktestEngine;
-import com.tradingbot.backtest.events.LoggingSimulationEventListener;
+import com.tradingbot.backtest.reporting.ConsoleReporter;
 import com.tradingbot.core.metrics.SimulationResult;
 import com.tradingbot.core.models.Candle;
 import lombok.extern.slf4j.Slf4j;
@@ -94,7 +94,7 @@ public class TrendFollowingSingleRunner {
 
         // Create backtest engine with event listener
         BacktestEngine engine = new BacktestEngine(tradingPair, INITIAL_CAPITAL);
-        engine.addEventListener(new LoggingSimulationEventListener());
+        engine.addEventListener(new ConsoleReporter());
 
         // Run simulation
         log.info("Running backtest simulation...");
