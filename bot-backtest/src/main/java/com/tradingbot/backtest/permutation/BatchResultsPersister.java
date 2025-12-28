@@ -8,10 +8,11 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Batches simulation results and persists them to MongoDB periodically.
@@ -33,12 +34,12 @@ public class BatchResultsPersister implements AutoCloseable {
     private final int batchSize;
     private final long flushIntervalSeconds;
 
-    private final List<SimulationResultDocument> buffer;
-    private final ReentrantLock lock;
+    private final ConcurrentLinkedQueue<SimulationResultDocument> buffer;
     private final ScheduledExecutorService scheduler;
+    private final AtomicInteger bufferSize;
 
     private volatile boolean closed = false;
-    private long totalPersisted = 0;
+    private final AtomicInteger totalPersisted;
 
     public BatchResultsPersister(
         DynamicSimulationResultRepository repository,
@@ -50,8 +51,9 @@ public class BatchResultsPersister implements AutoCloseable {
         this.batchSize = batchSize;
         this.flushIntervalSeconds = flushIntervalSeconds;
 
-        this.buffer = new ArrayList<>();
-        this.lock = new ReentrantLock();
+        this.buffer = new ConcurrentLinkedQueue<>();
+        this.bufferSize = new AtomicInteger(0);
+        this.totalPersisted = new AtomicInteger(0);
 
         // Start periodic flush scheduler
         this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -96,20 +98,12 @@ public class BatchResultsPersister implements AutoCloseable {
             configJson
         );
 
-        // Add to buffer
-        boolean shouldFlush = false;
-        lock.lock();
-        try {
-            buffer.add(document);
-            if (buffer.size() >= batchSize) {
-                shouldFlush = true;
-            }
-        } finally {
-            lock.unlock();
-        }
+        // Add to buffer (lock-free)
+        buffer.offer(document);
+        int currentSize = bufferSize.incrementAndGet();
 
-        // Flush if needed (outside lock)
-        if (shouldFlush) {
+        // Flush if needed
+        if (currentSize >= batchSize) {
             flush();
         }
     }
@@ -117,35 +111,35 @@ public class BatchResultsPersister implements AutoCloseable {
     /**
      * Flush all buffered results to MongoDB
      */
-    public void flush() {
-        List<SimulationResultDocument> toFlush;
-
-        lock.lock();
-        try {
-            if (buffer.isEmpty()) {
-                return;
-            }
-
-            toFlush = new ArrayList<>(buffer);
-            buffer.clear();
-        } finally {
-            lock.unlock();
+    public synchronized void flush() {
+        if (buffer.isEmpty()) {
+            return;
         }
+
+        // Drain buffer to list
+        List<SimulationResultDocument> toFlush = new ArrayList<>();
+        SimulationResultDocument doc;
+        while ((doc = buffer.poll()) != null) {
+            toFlush.add(doc);
+        }
+
+        if (toFlush.isEmpty()) {
+            return;
+        }
+
+        // Reset buffer size counter
+        bufferSize.addAndGet(-toFlush.size());
 
         try {
             repository.saveAll(toFlush);
-            totalPersisted += toFlush.size();
+            int persisted = totalPersisted.addAndGet(toFlush.size());
             log.info("Flushed {} results to MongoDB (total persisted: {})",
-                toFlush.size(), totalPersisted);
+                toFlush.size(), persisted);
         } catch (Exception e) {
             log.error("Failed to flush {} results", toFlush.size(), e);
             // Re-add to buffer on failure
-            lock.lock();
-            try {
-                buffer.addAll(0, toFlush);
-            } finally {
-                lock.unlock();
-            }
+            toFlush.forEach(buffer::offer);
+            bufferSize.addAndGet(toFlush.size());
         }
     }
 
@@ -164,19 +158,14 @@ public class BatchResultsPersister implements AutoCloseable {
      * Get number of results currently buffered
      */
     public int getBufferSize() {
-        lock.lock();
-        try {
-            return buffer.size();
-        } finally {
-            lock.unlock();
-        }
+        return bufferSize.get();
     }
 
     /**
      * Get total number of results persisted
      */
     public long getTotalPersisted() {
-        return totalPersisted;
+        return totalPersisted.get();
     }
 
     /**
@@ -219,6 +208,6 @@ public class BatchResultsPersister implements AutoCloseable {
         // Final flush
         flush();
 
-        log.info("BatchResultsPersister closed. Total persisted: {}", totalPersisted);
+        log.info("BatchResultsPersister closed. Total persisted: {}", totalPersisted.get());
     }
 }
