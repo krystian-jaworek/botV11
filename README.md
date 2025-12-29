@@ -5,7 +5,7 @@ Multi-module Java 21 trading bot with backtesting and production capabilities.
 ## Modules
 
 - **bot-core** - Domain models, interfaces, and utilities
-- **bot-algorithms** - Trading algorithm implementations (GridBot, TrendFollowing)
+- **bot-algorithms** - Trading algorithm implementations (GridBot)
 - **bot-backtest** - Backtesting engine with single and permutation modes
 - **bot-persistence** - MongoDB persistence layer
 - **bot-production** - Spring Boot production system with REST API
@@ -89,70 +89,7 @@ java -cp bot-backtest/target/bot-backtest.jar com.tradingbot.backtest.runners.Gr
 **MongoDB Collections:**
 - Results stored in: `GridBot-<PAIR>` (e.g., `GridBot-BTCUSDT`)
 
-### 3. TrendFollowing Algorithm (Multiple Timeframes)
-
-Multi-timeframe trend following strategy with advanced exit management.
-
-**Single Simulation:**
-```bash
-# Default config
-java -cp bot-backtest/target/bot-backtest.jar com.tradingbot.backtest.runners.TrendFollowingSingleRunner
-
-# Custom file
-java -cp bot-backtest/target/bot-backtest.jar com.tradingbot.backtest.runners.TrendFollowingSingleRunner ETHUSDT-1-365.txt
-```
-
-**Permutation Mode (~1000 simulations):**
-```bash
-# Default (BTCUSDT-1-365.txt, MongoDB enabled)
-java -cp bot-backtest/target/bot-backtest.jar com.tradingbot.backtest.runners.TrendFollowingPermutationRunner
-
-# Custom file
-java -cp bot-backtest/target/bot-backtest.jar com.tradingbot.backtest.runners.TrendFollowingPermutationRunner ETHUSDT
-
-# Disable MongoDB
-java -cp bot-backtest/target/bot-backtest.jar com.tradingbot.backtest.runners.TrendFollowingPermutationRunner BTCUSDT false
-```
-
-**Strategy Overview:**
-
-*Entry Conditions (ALL must be true):*
-1. Golden cross on primary timeframe (EMA fast crosses above slow)
-2. Golden cross OR fast > slow on secondary timeframe
-3. N higher lows detected (swing-based detection)
-4. MACD histogram growing for M periods on BOTH timeframes
-
-*Exit Strategies (priority order):*
-1. **Stop Loss** - Fixed % from entry (15-25%)
-2. **Trailing Stop** - Activates at profit threshold (50-75%)
-3. **Death Cross** - Fast EMA crosses below slow EMA
-4. **Take Profit Levels** - Partial closes (e.g., TP1: 200%, TP2: 300%, TP3: 500%)
-
-*Hybrydowy Trailing Stop:*
-- When trailing stop exceeds a TP level, dynamically adjust that TP higher
-- Locks in more profit while allowing further upside
-- Buffer: TP = trailing price × 1.10
-
-**Parameter Ranges (reduced):**
-- EMA fast primary: [50, 100] (2 values)
-- EMA slow primary: [150, 200, 250] (3 values)
-- EMA fast secondary: [20, 30] (2 values)
-- EMA slow secondary: [50, 100] (2 values)
-- MACD: [12,16] × [26,32] × [9,12]
-- Higher lows: [3, 4, 5] periods
-- Swing detection: [5, 7] periods
-- Histogram growth: [2, 3] periods
-- TP levels: Conservative [200,300,500] or Aggressive [250,400,700]
-- Stop loss: [15%, 20%, 25%]
-- Trailing activation: [50%, 75%]
-- Trailing distance: [20%, 25%]
-
-**Total: ~1000 valid combinations**
-
-**MongoDB Collections:**
-- Results stored in: `TrendFollowing-<PAIR>` (e.g., `TrendFollowing-BTCUSDT`)
-
-### 4. Production System (Spring Boot)
+### 3. Production System (Spring Boot)
 
 Start the production trading system:
 
