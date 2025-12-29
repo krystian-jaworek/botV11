@@ -203,23 +203,70 @@ public class TrendFollowingPermutationRunner {
         System.out.println(summary);
         System.out.println();
 
-        // Display top 10 configurations
+        // Display top 10 configurations with algorithm config
         System.out.println("===== TOP 10 CONFIGURATIONS =====");
-        for (int i = 0; i < summary.getTopTenResults().size(); i++) {
-            var result = summary.getTopTenResults().get(i);
+
+        // Get top 10 results with their configs
+        List<SimulationTask.Result> topTenWithConfigs = results.stream()
+            .filter(SimulationTask.Result::isSuccess)
+            .filter(r -> !r.getSimulationResult().isInterrupted())
+            .sorted((a, b) -> b.getSimulationResult().getProfitPercentage()
+                .compareTo(a.getSimulationResult().getProfitPercentage()))
+            .limit(10)
+            .collect(java.util.stream.Collectors.toList());
+
+        for (int i = 0; i < topTenWithConfigs.size(); i++) {
+            var taskResult = topTenWithConfigs.get(i);
+            var result = taskResult.getSimulationResult();
+            TrendFollowingConfig config = (TrendFollowingConfig) taskResult.getAlgorithmConfig();
+
             System.out.printf("%d. Profit: %.2f%% | Max DD: %.2f%% | Trades: %d%n",
                 i + 1,
                 result.getProfitPercentage(),
                 result.getMaxPortfolioDrawdownPercentage(),
                 result.getTotalTradesExecuted()
             );
+            System.out.printf("   Config: %s%n", config.toString());
         }
         System.out.println("=================================");
+
+        // If MongoDB is enabled, fetch top 10 from database with IDs
+        if (saveToMongo) {
+            System.out.println();
+            System.out.println("===== TOP 10 FROM MONGODB (WITH IDs) =====");
+
+            AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext();
+            context.register(MongoConfig.class);
+            context.refresh();
+
+            DynamicSimulationResultRepository repository = context.getBean(DynamicSimulationResultRepository.class);
+            List<com.tradingbot.persistence.entities.SimulationResultDocument> topFromDb =
+                repository.findSuccessful("TrendFollowing", tradingPair).stream()
+                    .limit(10)
+                    .collect(java.util.stream.Collectors.toList());
+
+            for (int i = 0; i < topFromDb.size(); i++) {
+                var doc = topFromDb.get(i);
+                System.out.printf("%d. Profit: %.2f%% | MongoDB ID: %s%n",
+                    i + 1,
+                    doc.getProfitPercentage(),
+                    doc.getId()
+                );
+                System.out.printf("   Config JSON: %s%n", doc.getConfigJson());
+            }
+            System.out.println("===========================================");
+
+            context.close();
+        }
 
         // Display best configuration details
         System.out.println();
         System.out.println("===== BEST CONFIGURATION DETAILS =====");
         System.out.println(summary.getBestResult());
+        if (!topTenWithConfigs.isEmpty()) {
+            TrendFollowingConfig bestConfig = (TrendFollowingConfig) topTenWithConfigs.get(0).getAlgorithmConfig();
+            System.out.printf("%nBest Config: %s%n", bestConfig.getConfigId());
+        }
         System.out.println("=======================================");
 
         log.info("TrendFollowing permutation run completed successfully");

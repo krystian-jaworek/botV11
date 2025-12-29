@@ -83,8 +83,16 @@ java -cp bot-backtest/target/bot-backtest.jar com.tradingbot.backtest.runners.Gr
 - Java 21 Virtual Threads for parallel execution
 - Progress reporting every 50 simulations
 - Batch MongoDB persistence (1000 results or 10s interval)
-- Top 10 configurations summary
+- Top 10 configurations summary with **algorithm parameters**
 - Best/worst/average/median statistics
+- **MongoDB ID display** for each top result (when MongoDB enabled)
+
+**Output:**
+The permutation runner displays:
+1. **Summary statistics** - total simulations, success rate, profit stats
+2. **Top 10 configurations** - includes algorithm parameters for each result
+3. **Top 10 from MongoDB** - includes MongoDB document IDs (if enabled)
+4. **Best configuration details** - complete metrics and config ID
 
 **MongoDB Collections:**
 - Results stored in: `GridBot-<PAIR>` (e.g., `GridBot-BTCUSDT`)
@@ -148,6 +156,21 @@ java -cp bot-backtest/target/bot-backtest.jar com.tradingbot.backtest.runners.Tr
 - Trailing distance: [20%, 25%]
 
 **Total: ~1000 valid combinations**
+
+**Features:**
+- Java 21 Virtual Threads for parallel execution
+- Progress reporting every 50 simulations
+- Batch MongoDB persistence (1000 results or 10s interval)
+- Top 10 configurations summary with **algorithm parameters**
+- Best/worst/average/median statistics
+- **MongoDB ID display** for each top result (when MongoDB enabled)
+
+**Output:**
+The permutation runner displays:
+1. **Summary statistics** - total simulations, success rate, profit stats
+2. **Top 10 configurations** - includes complete TrendFollowing parameters
+3. **Top 10 from MongoDB** - includes MongoDB document IDs (if enabled)
+4. **Best configuration details** - complete metrics and config ID
 
 **MongoDB Collections:**
 - Results stored in: `TrendFollowing-<PAIR>` (e.g., `TrendFollowing-BTCUSDT`)
