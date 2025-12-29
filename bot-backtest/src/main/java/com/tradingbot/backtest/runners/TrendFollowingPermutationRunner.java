@@ -195,6 +195,20 @@ public class TrendFollowingPermutationRunner {
             persister.close();
         }
 
+        // DEBUG: Log top results from memory before aggregation
+        log.info("DEBUG: Top 5 results from memory:");
+        results.stream()
+            .filter(SimulationTask.Result::isSuccess)
+            .filter(r -> !r.getSimulationResult().isInterrupted())
+            .sorted((a, b) -> b.getSimulationResult().getProfitPercentage()
+                .compareTo(a.getSimulationResult().getProfitPercentage()))
+            .limit(5)
+            .forEach(r -> log.info("  Profit: {}%, Success: {}, Interrupted: {}, TaskId: {}",
+                r.getSimulationResult().getProfitPercentage(),
+                r.isSuccess(),
+                r.getSimulationResult().isInterrupted(),
+                r.getTaskId()));
+
         // Aggregate and display results
         log.info("Aggregating results...");
         ResultsAggregator.Summary summary = ResultsAggregator.aggregate(results);
