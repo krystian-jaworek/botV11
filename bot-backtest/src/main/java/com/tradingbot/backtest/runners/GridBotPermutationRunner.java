@@ -131,7 +131,7 @@ public class GridBotPermutationRunner {
         log.info("  Allocation: {}%", permutation.getPortfolioAllocationRange());
 
         // Create simulation tasks
-        // NOTE: Stores only configs, not algorithm instances (same pattern as TrendFollowing)
+        // NOTE: Stores only configs, not algorithm instances to avoid OOM
         List<SimulationTask> tasks = new ArrayList<>();
         for (int i = 0; i < configurations.size(); i++) {
             GridBotConfig config = configurations.get(i);

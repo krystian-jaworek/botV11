@@ -21,7 +21,7 @@ public class SimulationTask {
     int taskId;
     String tradingPair;
     AlgorithmConfig algorithmConfig;  // Changed from TradingAlgorithm to AlgorithmConfig
-    Class<?> algorithmClass;  // Class to instantiate (e.g., TrendFollowingAlgorithm.class)
+    Class<?> algorithmClass;  // Class to instantiate (e.g., GridBotAlgorithm.class)
     List<Candle> candles;
     BigDecimal initialBalance;
 

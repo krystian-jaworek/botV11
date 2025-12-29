@@ -143,12 +143,6 @@ public class ParallelSimulationExecutor {
                     .getConstructor(task.getAlgorithmConfig().getClass())
                     .newInstance(task.getAlgorithmConfig());
 
-            // Pre-calculate indicators if TrendFollowing algorithm
-            // This is done per-task to avoid memory issues with 1000+ configurations
-            if (algorithm instanceof com.tradingbot.algorithms.trendfollowing.TrendFollowingAlgorithm tfAlgorithm) {
-                tfAlgorithm.preCalculateIndicators(task.getCandles());
-            }
-
             // Create backtest engine (no event listeners for performance)
             BacktestEngine engine = new BacktestEngine(
                 task.getTradingPair(),
