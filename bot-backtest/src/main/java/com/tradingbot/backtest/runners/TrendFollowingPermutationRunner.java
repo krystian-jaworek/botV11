@@ -230,31 +230,53 @@ public class TrendFollowingPermutationRunner {
         }
         System.out.println("=================================");
 
-        // If MongoDB is enabled, fetch top 10 from database with IDs
+        // If MongoDB is enabled, show MongoDB IDs for current run's top results
         if (saveToMongo) {
             System.out.println();
-            System.out.println("===== TOP 10 FROM MONGODB (WITH IDs) =====");
+            System.out.println("===== TOP 10 WITH MONGODB IDs (CURRENT RUN) =====");
+
+            // Wait a moment to ensure MongoDB flush completed
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
 
             AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext();
             context.register(MongoConfig.class);
             context.refresh();
 
             DynamicSimulationResultRepository repository = context.getBean(DynamicSimulationResultRepository.class);
-            List<com.tradingbot.persistence.entities.SimulationResultDocument> topFromDb =
-                repository.findSuccessful("TrendFollowing", tradingPair).stream()
-                    .limit(10)
-                    .collect(java.util.stream.Collectors.toList());
 
-            for (int i = 0; i < topFromDb.size(); i++) {
-                var doc = topFromDb.get(i);
+            // For each top result, find its MongoDB ID by matching config
+            for (int i = 0; i < topTenWithConfigs.size() && i < 10; i++) {
+                var taskResult = topTenWithConfigs.get(i);
+                var result = taskResult.getSimulationResult();
+                TrendFollowingConfig config = (TrendFollowingConfig) taskResult.getAlgorithmConfig();
+
+                // Try to find this exact config in MongoDB
+                List<com.tradingbot.persistence.entities.SimulationResultDocument> allDocs =
+                    repository.findAll("TrendFollowing", tradingPair);
+
+                String mongoId = "Not found in DB";
+                for (var doc : allDocs) {
+                    if (Math.abs(doc.getProfitPercentage().doubleValue() - result.getProfitPercentage().doubleValue()) < 0.01 &&
+                        doc.getTotalTradesExecuted() == result.getTotalTradesExecuted() &&
+                        doc.getConfigJson().contains("\"emaFastPrimary\":" + config.getEmaFastPrimary()) &&
+                        doc.getConfigJson().contains("\"emaSlowPrimary\":" + config.getEmaSlowPrimary())) {
+                        mongoId = doc.getId();
+                        break;
+                    }
+                }
+
                 System.out.printf("%d. Profit: %.2f%% | MongoDB ID: %s%n",
                     i + 1,
-                    doc.getProfitPercentage(),
-                    doc.getId()
+                    result.getProfitPercentage(),
+                    mongoId
                 );
-                System.out.printf("   Config JSON: %s%n", doc.getConfigJson());
+                System.out.printf("   Config: %s%n", config.toString());
             }
-            System.out.println("===========================================");
+            System.out.println("==================================================");
 
             context.close();
         }
