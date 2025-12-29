@@ -51,10 +51,10 @@ public class GridBotConfig implements AlgorithmConfig {
      */
     public static GridBotConfig defaultConfig() {
         return GridBotConfig.builder()
-            .gridLevels(20)
-            .gridDistancePercent(new BigDecimal("1.0"))
-            .takeProfitPercent(new BigDecimal("2.0"))
-            .portfolioAllocationPercent(new BigDecimal("70.0"))
+            .gridLevels(10)
+            .gridDistancePercent(new BigDecimal("2.0"))
+            .takeProfitPercent(new BigDecimal("4.5"))
+            .portfolioAllocationPercent(new BigDecimal("80.0"))
             .build();
     }
 

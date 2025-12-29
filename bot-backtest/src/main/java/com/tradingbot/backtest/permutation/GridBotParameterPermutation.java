@@ -75,9 +75,9 @@ public class GridBotParameterPermutation {
      */
     public static GridBotParameterPermutation defaultPermutation() {
         return GridBotParameterPermutation.builder()
-            .gridLevelsRange(ParameterRange.intRange("gridLevels", 10, 30, 5))
+            .gridLevelsRange(ParameterRange.intRange("gridLevels", 10, 50, 2))
             .gridDistanceRange(ParameterRange.decimalRange("gridDistance", "0.5", "2.0", "0.5"))
-            .takeProfitRange(ParameterRange.decimalRange("takeProfit", "1.0", "3.0", "0.5"))
+            .takeProfitRange(ParameterRange.decimalRange("takeProfit", "1.0", "5.0", "0.5"))
             .portfolioAllocationRange(ParameterRange.decimalRange("allocation", "60", "80", "10"))
             .build();
     }
