@@ -291,7 +291,10 @@ public class DynamicGridAlgorithm implements TradingAlgorithm<DynamicGridConfig>
 
     @Override
     public AlgorithmState getState() {
-        AlgorithmState state = new AlgorithmState(getName());
+        AlgorithmState state = AlgorithmState.builder()
+            .algorithmName(getName())
+            .lastUpdateTimestamp(System.currentTimeMillis())
+            .build();
 
         // Save grid levels
         List<Map<String, Object>> gridLevelsList = new ArrayList<>();
