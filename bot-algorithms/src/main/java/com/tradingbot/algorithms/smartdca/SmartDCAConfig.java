@@ -210,7 +210,7 @@ public class SmartDCAConfig implements AlgorithmConfig {
         return SmartDCAConfig.builder()
             .algorithmName("Smart Opportunistic DCA")
             .asset("BTCUSDT")
-            .timeframe("4h")
+            .timeframe("1m")  // 1-minute candles
             .startingCapital(new BigDecimal("10000"))
             .maxPortfolioAllocationPct(new BigDecimal("100"))
             .buyConditions(createDefaultBuyConditions())
@@ -225,13 +225,13 @@ public class SmartDCAConfig implements AlgorithmConfig {
         return BuyConditions.builder()
             .rsi(BuyConditions.RsiCondition.builder()
                 .period(14)
-                .oversoldThreshold(40)
-                .extremeOversold(30)
+                .oversoldThreshold(45)  // Increased for 1-minute candles
+                .extremeOversold(35)
                 .build())
             .priceDrop(BuyConditions.PriceDropCondition.builder()
-                .minFromLastBuyPct(new BigDecimal("4"))
-                .minFromLocalHighPct(new BigDecimal("6"))
-                .localHighLookbackPeriods(20)
+                .minFromLastBuyPct(new BigDecimal("2"))  // Reduced for 1-min candles
+                .minFromLocalHighPct(new BigDecimal("3"))  // Reduced for 1-min candles
+                .localHighLookbackPeriods(480)  // 8 hours for 1-min candles
                 .build())
             .volume(BuyConditions.VolumeCondition.builder()
                 .requireConfirmation(true)
@@ -240,11 +240,11 @@ public class SmartDCAConfig implements AlgorithmConfig {
                 .build())
             .emaSupport(BuyConditions.EmaSupportCondition.builder()
                 .enabled(true)
-                .period(200)
-                .maxProximityPct(new BigDecimal("12"))
+                .period(200)  // ~3.3 hours for 1-min candles
+                .maxProximityPct(new BigDecimal("15"))  // More lenient
                 .build())
             .cooldown(BuyConditions.CooldownCondition.builder()
-                .minHoursBetweenBuys(24)
+                .minHoursBetweenBuys(4)  // 4 hours = 240 minutes for 1-min candles
                 .build())
             .build();
     }
@@ -256,24 +256,24 @@ public class SmartDCAConfig implements AlgorithmConfig {
                 PositionSizing.PositionTier.builder()
                     .name("Tier 1 - Small Dip")
                     .conditions(PositionSizing.PositionTier.TierConditions.builder()
-                        .rsiRange(List.of(35, 40))
-                        .priceDropRange(List.of(new BigDecimal("4"), new BigDecimal("8")))
+                        .rsiRange(List.of(40, 45))  // Adjusted for 1-min candles
+                        .priceDropRange(List.of(new BigDecimal("1"), new BigDecimal("3")))  // 1-3% drop
                         .build())
                     .sizePct(new BigDecimal("4"))
                     .build(),
                 PositionSizing.PositionTier.builder()
                     .name("Tier 2 - Medium Dip")
                     .conditions(PositionSizing.PositionTier.TierConditions.builder()
-                        .rsiRange(List.of(28, 35))
-                        .priceDropRange(List.of(new BigDecimal("8"), new BigDecimal("15")))
+                        .rsiRange(List.of(35, 40))  // Adjusted for 1-min candles
+                        .priceDropRange(List.of(new BigDecimal("3"), new BigDecimal("6")))  // 3-6% drop
                         .build())
                     .sizePct(new BigDecimal("7"))
                     .build(),
                 PositionSizing.PositionTier.builder()
                     .name("Tier 3 - Deep Dip (Bargain)")
                     .conditions(PositionSizing.PositionTier.TierConditions.builder()
-                        .rsiRange(List.of(0, 28))
-                        .priceDropRange(List.of(new BigDecimal("15"), new BigDecimal("999")))
+                        .rsiRange(List.of(0, 35))  // Adjusted for 1-min candles
+                        .priceDropRange(List.of(new BigDecimal("6"), new BigDecimal("999")))  // >6% drop
                         .build())
                     .sizePct(new BigDecimal("12"))
                     .build()

@@ -42,13 +42,13 @@ public class SmartDCAParameterPermutation {
     }
 
     /**
-     * Create default permutation with reasonable ranges
+     * Create default permutation with reasonable ranges for 1-minute candles
      */
     public static SmartDCAParameterPermutation defaultPermutation() {
         return new SmartDCAParameterPermutation(
-            List.of(35, 40, 45),  // RSI thresholds
-            List.of(new BigDecimal("3"), new BigDecimal("4"), new BigDecimal("5")),  // Min price drop
-            List.of(new BigDecimal("1.2"), new BigDecimal("1.4"), new BigDecimal("1.6")),  // Volume spike
+            List.of(40, 45, 50),  // RSI thresholds for 1-min candles
+            List.of(new BigDecimal("1"), new BigDecimal("2"), new BigDecimal("3")),  // Min price drop for 1-min
+            List.of(new BigDecimal("1.2"), new BigDecimal("1.4"), new BigDecimal("1.6")),  // Volume spike (unused)
             List.of(new BigDecimal("3"), new BigDecimal("4"), new BigDecimal("5"))  // Tier 1 size
         );
     }
@@ -58,9 +58,9 @@ public class SmartDCAParameterPermutation {
      */
     public static SmartDCAParameterPermutation compactPermutation() {
         return new SmartDCAParameterPermutation(
-            List.of(40),  // Single RSI
-            List.of(new BigDecimal("4")),  // Single price drop
-            List.of(new BigDecimal("1.4")),  // Single volume spike
+            List.of(45),  // Single RSI for 1-min candles
+            List.of(new BigDecimal("2")),  // Single price drop for 1-min
+            List.of(new BigDecimal("1.4")),  // Single volume spike (unused)
             List.of(new BigDecimal("4"))  // Single tier size
         );
     }
