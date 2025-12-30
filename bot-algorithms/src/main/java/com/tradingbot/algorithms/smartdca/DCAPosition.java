@@ -4,20 +4,20 @@ import lombok.Getter;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.LinkedList;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Aggregates multiple DCA parcels into a single logical position.
- * Tracks total quantity, average entry price, and manages FIFO closing.
+ * Simple DCA position tracker using weighted average entry price.
+ * Tracks one logical position that grows with each buy.
  */
 public class DCAPosition {
 
     @Getter
-    private final LinkedList<DCAParcel> parcels;  // FIFO queue
+    private BigDecimal totalQuantity;
 
     @Getter
-    private BigDecimal totalQuantity;
+    private BigDecimal avgEntryPrice;
 
     @Getter
     private BigDecimal totalInvested;
@@ -26,11 +26,10 @@ public class DCAPosition {
     @Getter
     private BigDecimal peakPrice;
 
-    // Breakeven stop activation
+    // Stop activation flags
     @Getter
     private boolean breakevenStopActive;
 
-    // Trailing stop activation
     @Getter
     private boolean trailingStopActive;
 
@@ -38,45 +37,62 @@ public class DCAPosition {
     @Getter
     private final List<Integer> triggeredStages;
 
+    // Track all Position IDs created by buys (for closing via BacktestEngine)
+    @Getter
+    private final List<String> positionIds;
+
+    // Track last buy details
+    @Getter
+    private long lastBuyTimestamp;
+
+    @Getter
+    private BigDecimal lastBuyPrice;
+
     public DCAPosition() {
-        this.parcels = new LinkedList<>();
         this.totalQuantity = BigDecimal.ZERO;
+        this.avgEntryPrice = BigDecimal.ZERO;
         this.totalInvested = BigDecimal.ZERO;
         this.peakPrice = BigDecimal.ZERO;
         this.breakevenStopActive = false;
         this.trailingStopActive = false;
-        this.triggeredStages = new LinkedList<>();
+        this.triggeredStages = new ArrayList<>();
+        this.positionIds = new ArrayList<>();
+        this.lastBuyTimestamp = 0;
+        this.lastBuyPrice = BigDecimal.ZERO;
     }
 
     /**
-     * Add a new parcel to the position
+     * Add a purchase to the position (dokup).
+     * Recalculates weighted average entry price.
      */
-    public void addParcel(DCAParcel parcel) {
-        parcels.add(parcel);
-        totalQuantity = totalQuantity.add(parcel.getQuantity());
-        totalInvested = totalInvested.add(parcel.getInvestedAmount());
-    }
+    public void addPurchase(BigDecimal quantity, BigDecimal price, long timestamp, String positionId) {
+        BigDecimal invested = quantity.multiply(price);
 
-    /**
-     * Calculate average entry price across all parcels
-     */
-    public BigDecimal getAverageEntryPrice() {
-        if (totalQuantity.compareTo(BigDecimal.ZERO) == 0) {
-            return BigDecimal.ZERO;
+        totalInvested = totalInvested.add(invested);
+        totalQuantity = totalQuantity.add(quantity);
+
+        // Recalculate weighted average entry price
+        if (totalQuantity.compareTo(BigDecimal.ZERO) > 0) {
+            avgEntryPrice = totalInvested.divide(totalQuantity, 8, RoundingMode.HALF_UP);
         }
-        return totalInvested.divide(totalQuantity, 8, RoundingMode.HALF_UP);
+
+        // Track position ID for later closing
+        positionIds.add(positionId);
+
+        // Update last buy info
+        lastBuyTimestamp = timestamp;
+        lastBuyPrice = price;
     }
 
     /**
      * Calculate current profit percentage from average entry price
      */
     public BigDecimal getCurrentProfitPct(BigDecimal currentPrice) {
-        BigDecimal avgEntry = getAverageEntryPrice();
-        if (avgEntry.compareTo(BigDecimal.ZERO) == 0) {
+        if (avgEntryPrice.compareTo(BigDecimal.ZERO) == 0) {
             return BigDecimal.ZERO;
         }
-        return currentPrice.subtract(avgEntry)
-            .divide(avgEntry, 8, RoundingMode.HALF_UP)
+        return currentPrice.subtract(avgEntryPrice)
+            .divide(avgEntryPrice, 8, RoundingMode.HALF_UP)
             .multiply(new BigDecimal("100"));
     }
 
@@ -84,7 +100,7 @@ public class DCAPosition {
      * Calculate unrealized P&L at current price
      */
     public BigDecimal getUnrealizedPnL(BigDecimal currentPrice) {
-        return totalQuantity.multiply(currentPrice.subtract(getAverageEntryPrice()));
+        return totalQuantity.multiply(currentPrice.subtract(avgEntryPrice));
     }
 
     /**
@@ -127,8 +143,8 @@ public class DCAPosition {
     }
 
     /**
-     * Close a percentage of the position using FIFO.
-     * Returns the realized profit and the quantity closed.
+     * Close a percentage of the position.
+     * Returns the realized profit and quantity closed.
      *
      * @param percentageToClose Percentage of total quantity to close (e.g., 15 for 15%)
      * @param closePrice Price at which to close
@@ -140,93 +156,62 @@ public class DCAPosition {
             throw new IllegalArgumentException("Percentage must be between 0 and 100");
         }
 
-        BigDecimal targetQuantity = totalQuantity
+        // Calculate quantity to close
+        BigDecimal quantityToClose = totalQuantity
             .multiply(percentageToClose)
             .divide(new BigDecimal("100"), 8, RoundingMode.HALF_UP);
 
-        return closeFifo(targetQuantity, closePrice);
-    }
+        // Calculate invested amount to close (proportional)
+        BigDecimal investedToClose = totalInvested
+            .multiply(percentageToClose)
+            .divide(new BigDecimal("100"), 8, RoundingMode.HALF_UP);
 
-    /**
-     * Close specific quantity using FIFO
-     */
-    private CloseResult closeFifo(BigDecimal quantityToClose, BigDecimal closePrice) {
-        BigDecimal remainingToClose = quantityToClose;
-        BigDecimal totalRealizedPnL = BigDecimal.ZERO;
-        BigDecimal totalClosedQuantity = BigDecimal.ZERO;
-        BigDecimal totalInvestedClosed = BigDecimal.ZERO;
-
-        while (remainingToClose.compareTo(BigDecimal.ZERO) > 0 && !parcels.isEmpty()) {
-            DCAParcel oldest = parcels.getFirst();
-
-            if (oldest.getQuantity().compareTo(remainingToClose) <= 0) {
-                // Close entire parcel
-                BigDecimal pnl = oldest.getQuantity()
-                    .multiply(closePrice.subtract(oldest.getEntryPrice()));
-                totalRealizedPnL = totalRealizedPnL.add(pnl);
-                totalClosedQuantity = totalClosedQuantity.add(oldest.getQuantity());
-                totalInvestedClosed = totalInvestedClosed.add(oldest.getInvestedAmount());
-                remainingToClose = remainingToClose.subtract(oldest.getQuantity());
-                parcels.removeFirst();
-            } else {
-                // Partially close parcel
-                BigDecimal pnl = remainingToClose
-                    .multiply(closePrice.subtract(oldest.getEntryPrice()));
-                totalRealizedPnL = totalRealizedPnL.add(pnl);
-                totalClosedQuantity = totalClosedQuantity.add(remainingToClose);
-
-                BigDecimal investedPortion = oldest.getInvestedAmount()
-                    .multiply(remainingToClose)
-                    .divide(oldest.getQuantity(), 8, RoundingMode.HALF_UP);
-                totalInvestedClosed = totalInvestedClosed.add(investedPortion);
-
-                // Create updated parcel with reduced quantity
-                BigDecimal newQuantity = oldest.getQuantity().subtract(remainingToClose);
-                BigDecimal newInvested = oldest.getInvestedAmount().subtract(investedPortion);
-
-                parcels.removeFirst();
-                parcels.addFirst(DCAParcel.builder()
-                    .id(oldest.getId())
-                    .timestamp(oldest.getTimestamp())
-                    .entryPrice(oldest.getEntryPrice())
-                    .quantity(newQuantity)
-                    .investedAmount(newInvested)
-                    .tierName(oldest.getTierName())
-                    .build());
-
-                remainingToClose = BigDecimal.ZERO;
-            }
-        }
+        // Calculate realized P&L from average entry price
+        BigDecimal realizedPnL = quantityToClose.multiply(closePrice.subtract(avgEntryPrice));
 
         // Update totals
-        totalQuantity = totalQuantity.subtract(totalClosedQuantity);
-        totalInvested = totalInvested.subtract(totalInvestedClosed);
+        totalQuantity = totalQuantity.subtract(quantityToClose);
+        totalInvested = totalInvested.subtract(investedToClose);
 
-        return new CloseResult(totalRealizedPnL, totalClosedQuantity, totalInvestedClosed);
+        // Recalculate average entry (should remain the same for remaining quantity)
+        if (totalQuantity.compareTo(BigDecimal.ZERO) > 0) {
+            avgEntryPrice = totalInvested.divide(totalQuantity, 8, RoundingMode.HALF_UP);
+        } else {
+            avgEntryPrice = BigDecimal.ZERO;
+        }
+
+        return new CloseResult(realizedPnL, quantityToClose, investedToClose);
     }
 
     /**
      * Check if position is empty
      */
     public boolean isEmpty() {
-        return parcels.isEmpty() || totalQuantity.compareTo(BigDecimal.ZERO) == 0;
+        return totalQuantity.compareTo(BigDecimal.ZERO) == 0;
     }
 
     /**
-     * Get the timestamp of the most recent parcel
+     * Get number of underlying Position objects
      */
-    public long getLastBuyTimestamp() {
-        if (parcels.isEmpty()) {
-            return 0;
+    public int getPositionCount() {
+        return positionIds.size();
+    }
+
+    /**
+     * Get the oldest position ID (for FIFO closing via engine)
+     */
+    public String getOldestPositionId() {
+        if (positionIds.isEmpty()) {
+            return null;
         }
-        return parcels.getLast().getTimestamp();
+        return positionIds.get(0);
     }
 
     /**
-     * Get number of parcels
+     * Remove a position ID after it's been closed
      */
-    public int getParcelCount() {
-        return parcels.size();
+    public void removePositionId(String positionId) {
+        positionIds.remove(positionId);
     }
 
     /**

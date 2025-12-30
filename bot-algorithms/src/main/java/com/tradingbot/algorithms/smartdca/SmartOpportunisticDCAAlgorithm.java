@@ -13,9 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Smart Opportunistic DCA Algorithm for long-term BTC accumulation.
@@ -26,6 +24,11 @@ import java.util.Map;
  * - Multi-layered profit management: staged exits, technical exits, trailing stops
  * - Reinvest all profits back into DCA pool
  * - Max drawdown protection (pause buying at -20%)
+ *
+ * Position Model:
+ * - One logical DCA position that grows with each buy (weighted average entry)
+ * - Closes percentage of total position based on profit targets
+ * - All profit calculated from average entry price
  */
 @Slf4j
 public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCAConfig> {
@@ -37,7 +40,7 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
     // Candle history for indicator calculation
     private final List<Candle> candleHistory;
 
-    // DCA position tracking
+    // DCA position tracking (one logical position)
     private DCAPosition dcaPosition;
 
     // Available capital (increases with reinvestment)
@@ -51,10 +54,6 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
     private long pauseStartTimestamp;
     private BigDecimal priceAtPause;
 
-    // Track position IDs created by this algorithm
-    // Maps internal parcel ID to external Position ID
-    private final Map<String, String> parcelToPositionId;
-
     public SmartOpportunisticDCAAlgorithm(SmartDCAConfig config) {
         this.config = config;
         this.config.validate();
@@ -64,7 +63,6 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
 
         this.candleHistory = new ArrayList<>();
         this.dcaPosition = new DCAPosition();
-        this.parcelToPositionId = new HashMap<>();
 
         this.availableCapital = config.getStartingCapital();
         this.peakEquity = config.getStartingCapital();
@@ -115,9 +113,9 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
             List<ProfitManager.ExitSignal> exitSignals = profitManager.evaluateExits(
                 dcaPosition, candleHistory, candle, ema200);
 
-            // Process exit signals
-            for (ProfitManager.ExitSignal signal : exitSignals) {
-                return executeExit(signal, currentPrice, candle.timestamp());
+            // Process exit signals (take first one if multiple)
+            if (!exitSignals.isEmpty()) {
+                return executeExit(exitSignals.get(0), currentPrice, candle.timestamp());
             }
         }
 
@@ -127,7 +125,9 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
                 candleHistory,
                 candle,
                 dcaPosition.getLastBuyTimestamp(),
-                dcaPosition.isEmpty() ? null : dcaPosition.getParcels().getLast().getEntryPrice()
+                dcaPosition.getLastBuyPrice().compareTo(BigDecimal.ZERO) > 0
+                    ? dcaPosition.getLastBuyPrice()
+                    : null
             );
 
             if (buySignal != null) {
@@ -160,25 +160,26 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
         BigDecimal quantity = investAmount.divide(price, 8, RoundingMode.HALF_UP);
 
         // Check max concurrent positions
-        if (dcaPosition.getParcelCount() >= config.getRiskManagement().getMaxConcurrentPositions()) {
+        if (dcaPosition.getPositionCount() >= config.getRiskManagement().getMaxConcurrentPositions()) {
             log.warn("Max concurrent positions reached: {}", config.getRiskManagement().getMaxConcurrentPositions());
             return TradingDecision.Hold.INSTANCE;
         }
 
-        // Create parcel
-        DCAParcel parcel = DCAParcel.create(timestamp, price, quantity, investAmount, signal.getTier().getName());
-
-        log.info("BUY: tier={}, price={}, qty={}, invest={}, RSI={}, drop={}%",
+        log.info("BUY: tier={}, price={}, qty={}, invest={}, RSI={}, drop={}%, current_avg_entry={}",
             signal.getTier().getName(), price, quantity, investAmount,
-            signal.getRsi(), signal.getPriceDrop());
+            signal.getRsi(), signal.getPriceDrop(),
+            dcaPosition.isEmpty() ? "N/A" : dcaPosition.getAvgEntryPrice());
 
-        // We'll add parcel in onPositionOpened callback
-        // For now, just return the decision
+        // Deduct from available capital now (before position opens)
+        availableCapital = availableCapital.subtract(investAmount);
+
+        // Return decision to open position
+        // We'll add to dcaPosition in onPositionOpened callback
         return new TradingDecision.OpenPosition(
             OrderSide.LONG,
             quantity,
             price,
-            parcel.getId()  // Store parcel ID in metadata
+            signal.getTier().getName()  // Store tier name in metadata
         );
     }
 
@@ -188,36 +189,33 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
     private TradingDecision executeExit(ProfitManager.ExitSignal signal,
                                         BigDecimal price, long timestamp) {
 
-        log.info("EXIT: type={}, close_pct={}%, reason={}",
-            signal.getType(), signal.getPercentageToClose(), signal.getReason());
-
-        // Close percentage of position
+        // Calculate quantity to close
         DCAPosition.CloseResult result = dcaPosition.closePercentage(
             signal.getPercentageToClose(), price);
 
-        log.info("Realized P&L: {}, Qty closed: {}, Invested recovered: {}",
-            result.getRealizedPnL(), result.getQuantityClosed(), result.getInvestedClosed());
+        log.info("EXIT: type={}, close_pct={}%, reason={}, qty={}, P&L={}, avg_entry={}",
+            signal.getType(), signal.getPercentageToClose(), signal.getReason(),
+            result.getQuantityClosed(), result.getRealizedPnL(), dcaPosition.getAvgEntryPrice());
 
         // Reinvest if configured
         if (config.getReinvestment().isEnabled() && config.getReinvestment().isAddToAvailableCapital()) {
-            availableCapital = availableCapital.add(result.getRealizedPnL()).add(result.getInvestedClosed());
-            log.info("Reinvested: new available capital = {}", availableCapital);
+            BigDecimal totalReturned = result.getRealizedPnL().add(result.getInvestedClosed());
+            availableCapital = availableCapital.add(totalReturned);
+            log.info("Reinvested: P&L={}, invested_recovered={}, new_capital={}",
+                result.getRealizedPnL(), result.getInvestedClosed(), availableCapital);
         }
 
-        // Since we're using aggregate position, we can't directly map to individual Position IDs
-        // The backtest engine will need to handle this differently
-        // For now, we'll just signal a partial close with the quantity
-        // This is a limitation - we may need to adjust the architecture
+        // Get oldest position ID to close
+        String oldestPositionId = dcaPosition.getOldestPositionId();
 
-        // Return a special decision that the engine can interpret
-        // We'll use metadata to encode the quantity and reason
-        String metadata = String.format("qty:%.8f,reason:%s", result.getQuantityClosed(), signal.getReason());
+        if (oldestPositionId == null) {
+            log.error("No position ID found for closing - this shouldn't happen!");
+            return TradingDecision.Hold.INSTANCE;
+        }
 
-        // We need to return ClosePositionPartial, but we don't have a positionId
-        // This is a design issue - DCA doesn't map 1:1 to Position model
-        // For now, we'll use a placeholder and handle in the engine
+        // Return partial close decision
         return new TradingDecision.ClosePositionPartial(
-            "DCA_POSITION",  // Placeholder
+            oldestPositionId,
             result.getQuantityClosed(),
             price,
             signal.getReason()
@@ -293,34 +291,32 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
 
     @Override
     public void onPositionOpened(Position position) {
-        // Extract parcel ID from metadata
-        String parcelId = position.getMetadata();
+        // Add purchase to DCA position
+        dcaPosition.addPurchase(
+            position.getQuantity(),
+            position.getEntryPrice(),
+            position.getOpenTimestamp(),
+            position.getId()
+        );
 
-        // Create parcel and add to DCA position
-        DCAParcel parcel = DCAParcel.builder()
-            .id(parcelId)
-            .timestamp(position.getOpenTimestamp())
-            .entryPrice(position.getEntryPrice())
-            .quantity(position.getQuantity())
-            .investedAmount(position.getEntryPrice().multiply(position.getQuantity()))
-            .tierName("DCA")  // We don't have tier name here, would need to pass it
-            .build();
-
-        dcaPosition.addParcel(parcel);
-
-        // Track mapping
-        parcelToPositionId.put(parcelId, position.getId());
-
-        // Deduct from available capital
-        availableCapital = availableCapital.subtract(parcel.getInvestedAmount());
-
-        log.debug("Position opened: parcel {}, total parcels: {}, avg entry: {}",
-            parcelId.substring(0, 8), dcaPosition.getParcelCount(), dcaPosition.getAverageEntryPrice());
+        log.debug("Position opened: ID={}, qty={}, price={}, new_avg_entry={}, total_qty={}, position_count={}",
+            position.getId().substring(0, 8),
+            position.getQuantity(),
+            position.getEntryPrice(),
+            dcaPosition.getAvgEntryPrice(),
+            dcaPosition.getTotalQuantity(),
+            dcaPosition.getPositionCount());
     }
 
     @Override
     public void onPositionClosed(ClosedPosition closedPosition) {
-        log.debug("Position closed: {}, P&L: {}", closedPosition.getId(), closedPosition.getRealizedPnL());
+        // Remove position ID from tracking
+        dcaPosition.removePositionId(closedPosition.getId());
+
+        log.debug("Position closed: ID={}, P&L={}, remaining_positions={}",
+            closedPosition.getId().substring(0, 8),
+            closedPosition.getRealizedPnL(),
+            dcaPosition.getPositionCount());
     }
 
     @Override
@@ -331,7 +327,7 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
         state.putState("peakEquity", peakEquity);
         state.putState("buyingPaused", buyingPaused);
         state.putState("pauseStartTimestamp", pauseStartTimestamp);
-        // Note: DCAPosition serialization would need custom logic
+        // Note: Full DCAPosition serialization would need custom logic
         return state;
     }
 
@@ -341,6 +337,6 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
         this.peakEquity = state.getStateOrDefault("peakEquity", config.getStartingCapital());
         this.buyingPaused = state.getStateOrDefault("buyingPaused", false);
         this.pauseStartTimestamp = state.getStateOrDefault("pauseStartTimestamp", 0L);
-        // Note: DCAPosition restoration would need custom logic
+        // Note: Full DCAPosition restoration would need custom logic
     }
 }
