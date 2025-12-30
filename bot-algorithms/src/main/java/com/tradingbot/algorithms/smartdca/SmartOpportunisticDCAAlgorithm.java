@@ -128,7 +128,7 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
 
             // Process exit signals (initiate pending exit)
             if (!exitSignals.isEmpty()) {
-                return initiatePendingExit(exitSignals.get(0), currentPrice);
+                return initiatePendingExit(exitSignals.get(0), currentPrice, portfolio);
             }
         }
 
@@ -199,7 +199,7 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
     /**
      * Initiate a pending exit (sets up state for multi-position closing)
      */
-    private TradingDecision initiatePendingExit(ProfitManager.ExitSignal signal, BigDecimal price) {
+    private TradingDecision initiatePendingExit(ProfitManager.ExitSignal signal, BigDecimal price, Portfolio portfolio) {
         // Calculate total quantity to close
         BigDecimal totalQtyToClose = dcaPosition.getTotalQuantity()
             .multiply(signal.getPercentageToClose())
@@ -215,7 +215,7 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
             totalQtyToClose, dcaPosition.getAvgEntryPrice());
 
         // Process first close immediately
-        return processPendingExit(null, price);
+        return processPendingExit(portfolio, price);
     }
 
     /**
@@ -233,27 +233,27 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
         }
 
         // Get the actual position from portfolio to know its quantity
-        Position oldestPosition = portfolio != null ? portfolio.getOpenPositions().get(oldestPositionId) : null;
+        Position oldestPosition = portfolio.getOpenPositions().get(oldestPositionId);
+
+        if (oldestPosition == null) {
+            log.error("Position {} not found in portfolio - resetting pending state", oldestPositionId);
+            pendingExitQuantity = BigDecimal.ZERO;
+            pendingExitReason = null;
+            return TradingDecision.Hold.INSTANCE;
+        }
 
         // Determine how much to close from this position
         BigDecimal qtyToCloseFromThisPosition;
         boolean closeFullPosition;
 
-        if (oldestPosition != null) {
-            BigDecimal availableQty = oldestPosition.getQuantity();
+        BigDecimal availableQty = oldestPosition.getQuantity();
 
-            if (pendingExitQuantity.compareTo(availableQty) >= 0) {
-                // Close entire position
-                qtyToCloseFromThisPosition = availableQty;
-                closeFullPosition = true;
-            } else {
-                // Close partial
-                qtyToCloseFromThisPosition = pendingExitQuantity;
-                closeFullPosition = false;
-            }
+        if (pendingExitQuantity.compareTo(availableQty) >= 0) {
+            // Close entire position
+            qtyToCloseFromThisPosition = availableQty;
+            closeFullPosition = true;
         } else {
-            // Portfolio not available (first call from initiate), assume we need to close partial
-            // We'll rely on the engine to handle the close, and onPositionClosed callback will update state
+            // Close partial
             qtyToCloseFromThisPosition = pendingExitQuantity;
             closeFullPosition = false;
         }
