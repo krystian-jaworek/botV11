@@ -184,8 +184,10 @@ public class ConsoleReporter implements SimulationEventListener {
 
         // Header
         System.out.printf("%-20s | %-6s | %-10s | %-12s | %-12s | %-12s | %-12s%n",
-            "Date/Time", "Type", "Pos ID", "Avg Entry", "Close Price", "Volume", "P&L");
+            "Date/Time", "Type", "Pos ID", "Entry Price", "Close Price", "Volume", "P&L");
         System.out.println("-".repeat(120));
+
+        // Note: For DCA algorithms, "Entry Price" shows individual position entry, not weighted average
 
         // Data rows
         for (FilledOrder order : filledOrders) {

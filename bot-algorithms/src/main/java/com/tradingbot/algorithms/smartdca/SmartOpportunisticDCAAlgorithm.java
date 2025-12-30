@@ -186,13 +186,19 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
         // Deduct from available capital now (before position opens)
         availableCapital = availableCapital.subtract(investAmount);
 
+        // Calculate what the new weighted average entry will be after this buy
+        BigDecimal futureAvgEntry = dcaPosition.getTotalInvested().add(investAmount)
+            .divide(dcaPosition.getTotalQuantity().add(quantity), 8, RoundingMode.HALF_UP);
+
         // Return decision to open position
-        // We'll add to dcaPosition in onPositionOpened callback
+        // Store tier name and DCA weighted average in metadata for display
+        String metadata = String.format("%s | DCA Avg: %.2f", signal.getTier().getName(), futureAvgEntry);
+
         return new TradingDecision.OpenPosition(
             OrderSide.LONG,
             quantity,
             price,
-            signal.getTier().getName()  // Store tier name in metadata
+            metadata
         );
     }
 
