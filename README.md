@@ -5,7 +5,7 @@ Multi-module Java 21 trading bot with backtesting and production capabilities.
 ## Modules
 
 - **bot-core** - Domain models, interfaces, and utilities
-- **bot-algorithms** - Trading algorithm implementations (GridBot, DynamicGrid)
+- **bot-algorithms** - Trading algorithm implementations (GridBot, DynamicGrid, RecalculatingGrid)
 - **bot-backtest** - Backtesting engine with single and permutation modes
 - **bot-persistence** - MongoDB persistence layer
 - **bot-production** - Spring Boot production system with REST API
@@ -174,7 +174,86 @@ The permutation runner displays:
 **MongoDB Collections:**
 - Results stored in: `DynamicGrid-<PAIR>` (e.g., `DynamicGrid-BTCUSDT`)
 
-### 4. Production System (Spring Boot)
+### 4. RecalculatingGrid Trading (Grid Reset Strategy)
+
+Grid trading with full recalculation on price breakouts.
+
+**Single Simulation:**
+```bash
+# Default config
+java -cp bot-backtest/target/bot-backtest.jar com.tradingbot.backtest.runners.RecalculatingGridSingleRunner
+
+# Custom file
+java -cp bot-backtest/target/bot-backtest.jar com.tradingbot.backtest.runners.RecalculatingGridSingleRunner ETHUSDT-1-365.txt
+```
+
+**Permutation Mode (~1,600 simulations):**
+```bash
+# Default (BTCUSDT-1-365.txt, MongoDB enabled)
+java -cp bot-backtest/target/bot-backtest.jar com.tradingbot.backtest.runners.RecalculatingGridPermutationRunner
+
+# Custom file
+java -cp bot-backtest/target/bot-backtest.jar com.tradingbot.backtest.runners.RecalculatingGridPermutationRunner ETHUSDT
+
+# Disable MongoDB
+java -cp bot-backtest/target/bot-backtest.jar com.tradingbot.backtest.runners.RecalculatingGridPermutationRunner BTCUSDT false
+```
+
+**Strategy Overview:**
+
+RecalculatingGrid uses a complete grid reset mechanism:
+
+1. **Grid Initialization**: Grid centered around current price with buy levels below
+
+2. **Normal Operation**:
+   - Buy when price hits grid level
+   - Take profit individually per position
+   - Each position has own TP level
+
+3. **Top Reset Mechanism** (price > top + X%):
+   - Close ALL positions (with profit)
+   - Recalculate entire grid from current price
+   - Start fresh with new grid
+
+4. **Bottom Reset Mechanism** (price < bottom - Y%):
+   - HARD RESET: Close ALL positions (with loss)
+   - Recalculate entire grid from current price
+   - Cut losses and adapt to new price level
+
+5. **Individual Take Profits**:
+   - Each position has its own TP level
+   - TP = entry_price × (1 + tp_percent)
+   - Positions close independently when TP hit
+
+**Parameter Ranges (default):**
+- Grid levels: 10, 15, 20 (3 values)
+- Grid spacing: 0.5%, 1.0%, 1.5%, 2.0% (4 values)
+- Take profit: 1.0%, 1.5%, 2.0%, 2.5%, 3.0% (5 values)
+- Total grid capital: 60%, 75%, 90% of portfolio (3 values) - divided equally among positions
+- Top reset trigger: 5%, 10%, 15% above top level (3 values)
+- Bottom reset trigger: 5%, 10%, 15% below bottom level (3 values)
+
+**Total:** 3 × 4 × 5 × 3 × 3 × 3 = **1,620 simulations**
+
+**Features:**
+- Java 21 Virtual Threads for parallel execution
+- Progress reporting every 50 simulations
+- Batch MongoDB persistence (1000 results or 10s interval)
+- Top 10 configurations summary with **algorithm parameters**
+- Best/worst/average/median statistics
+- **MongoDB ID display** for each top result (when MongoDB enabled)
+
+**Output:**
+The permutation runner displays:
+1. **Summary statistics** - total simulations, success rate, profit stats
+2. **Top 10 configurations** - includes algorithm parameters for each result
+3. **Top 10 with MongoDB IDs** - matches current results with MongoDB IDs
+4. **Best configuration details** - complete metrics and config ID
+
+**MongoDB Collections:**
+- Results stored in: `RecalculatingGrid-<PAIR>` (e.g., `RecalculatingGrid-BTCUSDT`)
+
+### 5. Production System (Spring Boot)
 
 Start the production trading system:
 
@@ -310,6 +389,52 @@ Price > top × (1 + trigger%):
 - Bottom breach at $81,500 → close oldest, add $80,890
 - Top expansion at $99,970 → close oldest, add $100,471
 
+### RecalculatingGrid Algorithm (LONG only)
+
+**Strategy:**
+1. Create grid of buy levels around initial price
+2. When price drops to buy level → OPEN position
+3. When price reaches position's TP → CLOSE with profit
+4. When price exceeds top + X% → RESET (close all, recalculate grid)
+5. When price falls below bottom - Y% → HARD RESET (close all with loss, recalculate grid)
+
+**Grid Initialization:**
+- Total levels: N (e.g., 10)
+- Levels below start: floor(N/2) - buy orders
+- Level at start: neutral
+- Levels above start: remaining - price targets
+- Spacing: geometric (e.g., 1% between levels)
+
+**Top Reset Flow:**
+```
+Price > top × (1 + topResetTrigger%):
+  1. Close ALL positions (usually with profit)
+  2. Clear grid
+  3. Initialize new grid from current price
+  4. Continue trading with fresh grid
+```
+
+**Bottom Reset Flow (HARD RESET):**
+```
+Price < bottom × (1 - bottomResetTrigger%):
+  1. Close ALL positions (cut losses)
+  2. Clear grid
+  3. Initialize new grid from current price
+  4. Continue trading with fresh grid
+```
+
+**Reset Characteristics:**
+- Complete grid recalculation
+- All positions closed before reset
+- Grid centered on new current price
+- Adapts to major price movements
+- Prevents accumulation of underwater positions
+
+**Example** (10 levels, 1% spacing, $90,000 start, 10% triggers):
+- Initial grid: $81,707 ... $89,109 | $90,000 | $90,900 ... $99,471
+- Top reset at $109,418 (>$99,471 × 1.10) → close all, new grid from $109,418
+- Bottom reset at $73,536 (<$81,707 × 0.90) → close all with loss, new grid from $73,536
+
 ### Simulation Interruption
 
 Simulation stops if:
@@ -346,6 +471,8 @@ mongodb://admin:password@localhost:27017/
 - `GridBot-ETHUSDT` - Simulation results for GridBot on ETHUSDT
 - `DynamicGrid-BTCUSDT` - Simulation results for DynamicGrid on BTCUSDT
 - `DynamicGrid-ETHUSDT` - Simulation results for DynamicGrid on ETHUSDT
+- `RecalculatingGrid-BTCUSDT` - Simulation results for RecalculatingGrid on BTCUSDT
+- `RecalculatingGrid-ETHUSDT` - Simulation results for RecalculatingGrid on ETHUSDT
 - `algorithm_states` - Active algorithm states (production)
 - `algorithm-events` - Event sourcing logs (DEBUG mode)
 
