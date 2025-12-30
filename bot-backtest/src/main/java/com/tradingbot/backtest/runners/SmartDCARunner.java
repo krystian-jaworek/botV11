@@ -91,9 +91,22 @@ public class SmartDCARunner {
         System.out.println("\n" + "=".repeat(80));
         System.out.println("SIMULATION RESULTS - Smart Opportunistic DCA");
         System.out.println("=".repeat(80));
-        System.out.println("Configuration: " + config.getConfigId());
+        System.out.println("Algorithm:        " + algorithm.getName());
+        System.out.println("Trading Pair:     " + tradingPair);
+        System.out.println("Configuration:    " + config.getConfigId());
         System.out.println();
-        System.out.println(result.getSummary());
+        System.out.println("--- PROFITABILITY ---");
+        System.out.printf("Initial Balance:  $%.2f%n", result.getInitialBalance());
+        System.out.printf("Final Equity:     $%.2f%n", result.getFinalEquity());
+        System.out.printf("Profit:           $%.2f (%.2f%%)%n",
+            result.getProfitAbsolute(), result.getProfitPercentage());
+        System.out.println();
+        System.out.println("--- RISK ---");
+        System.out.printf("Max Drawdown:     %.2f%%%n", result.getMaxPortfolioDrawdownPercentage());
+        System.out.println();
+        System.out.println("--- ACTIVITY ---");
+        System.out.printf("Total Trades:     %d%n", result.getTotalTradesExecuted());
+        System.out.printf("Open Positions:   %d%n", result.getOpenPositionsAtEnd());
         System.out.println("=".repeat(80));
 
         // Display filled orders table if available
