@@ -19,7 +19,7 @@ import java.util.List;
  * Smart Opportunistic DCA Algorithm for long-term BTC accumulation.
  *
  * Strategy:
- * - Buy dips based on RSI, price drops, volume spikes, and EMA support
+ * - Buy dips based on RSI, price drops, and EMA support
  * - Progressive position sizing (3 tiers)
  * - Multi-layered profit management: staged exits, technical exits, trailing stops
  * - Reinvest all profits back into DCA pool
@@ -85,10 +85,9 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
     public void initialize(BigDecimal initialPrice) {
         log.info("SmartOpportunisticDCA initialized: capital={}, asset={}",
             config.getStartingCapital(), config.getAsset());
-        log.info("Buy conditions: RSI < {}, price drop min {}%, volume spike {}x",
+        log.info("Buy conditions: RSI < {}, price drop min {}%",
             config.getBuyConditions().getRsi().getOversoldThreshold(),
-            config.getBuyConditions().getPriceDrop().getMinFromLastBuyPct(),
-            config.getBuyConditions().getVolume().getSpikeMultiplier());
+            config.getBuyConditions().getPriceDrop().getMinFromLastBuyPct());
         log.info("Position tiers: {}", config.getPositionSizing().getTiers().size());
     }
 

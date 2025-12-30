@@ -59,6 +59,9 @@ public class BuySignalEvaluator {
             }
         }
 
+        // Volume spike check DISABLED - candles don't contain volume data
+        // If you have volume data, uncomment below to enable volume confirmation
+        /*
         BigDecimal volumeMA = null;
         if (config.getBuyConditions().getVolume().isRequireConfirmation()) {
             volumeMA = TechnicalIndicators.calculateVolumeSMA(candles,
@@ -68,6 +71,7 @@ public class BuySignalEvaluator {
                 return null;
             }
         }
+        */
 
         BigDecimal localHigh = TechnicalIndicators.findHighestClose(candles,
             config.getBuyConditions().getPriceDrop().getLocalHighLookbackPeriods());
@@ -101,7 +105,9 @@ public class BuySignalEvaluator {
             return null;
         }
 
-        // 5. Check volume spike
+        // 5. Check volume spike - DISABLED (no volume data in candles)
+        // If you have volume data, uncomment and update volumeMA calculation above
+        /*
         if (config.getBuyConditions().getVolume().isRequireConfirmation()) {
             BigDecimal volumeRatio = currentCandle.volume()
                 .divide(volumeMA, 8, java.math.RoundingMode.HALF_UP);
@@ -111,6 +117,7 @@ public class BuySignalEvaluator {
                 return null;
             }
         }
+        */
 
         // 6. Check EMA support proximity
         if (config.getBuyConditions().getEmaSupport().isEnabled()) {
@@ -131,9 +138,8 @@ public class BuySignalEvaluator {
             return null;
         }
 
-        log.info("Buy signal generated: tier={}, RSI={}, drop={}%, volume_spike={}x",
-            selectedTier.getName(), rsi, dropFromLocalHigh,
-            volumeMA != null ? currentCandle.volume().divide(volumeMA, 2, java.math.RoundingMode.HALF_UP) : "N/A");
+        log.info("Buy signal generated: tier={}, RSI={}, drop={}%",
+            selectedTier.getName(), rsi, dropFromLocalHigh);
 
         return new BuySignal(selectedTier, rsi, dropFromLocalHigh);
     }
