@@ -43,9 +43,6 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
     // DCA position tracking (one logical position)
     private DCAPosition dcaPosition;
 
-    // Available capital (increases with reinvestment)
-    private BigDecimal availableCapital;
-
     // Peak equity tracking for drawdown
     private BigDecimal peakEquity;
 
@@ -69,7 +66,6 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
         this.candleHistory = new ArrayList<>();
         this.dcaPosition = new DCAPosition();
 
-        this.availableCapital = config.getStartingCapital();
         this.peakEquity = config.getStartingCapital();
         this.buyingPaused = false;
         this.pauseStartTimestamp = 0;
@@ -111,7 +107,7 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
         updateEquityTracking(portfolio, currentPrice);
 
         // Check drawdown pause/resume
-        updateDrawdownState(currentPrice, candle.timestamp());
+        updateDrawdownState(portfolio, currentPrice, candle.timestamp());
 
         // 1. Handle pending exits first (close positions in FIFO order)
         if (pendingExitQuantity.compareTo(BigDecimal.ZERO) > 0 && !dcaPosition.isEmpty()) {
@@ -133,7 +129,7 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
         }
 
         // 3. Check buy signals (if not paused and have capital)
-        if (!buyingPaused && availableCapital.compareTo(BigDecimal.ZERO) > 0) {
+        if (!buyingPaused && portfolio.getCashBalance().compareTo(BigDecimal.ZERO) > 0) {
             BuySignalEvaluator.BuySignal buySignal = buyEvaluator.evaluate(
                 candleHistory,
                 candle,
@@ -158,15 +154,18 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
                                        BigDecimal price, long timestamp,
                                        Portfolio portfolio) {
 
+        // Get available cash from portfolio
+        BigDecimal availableCash = portfolio.getCashBalance();
+
         // Calculate position size
         BigDecimal sizePct = signal.getTier().getSizePct();
-        BigDecimal investAmount = availableCapital
+        BigDecimal investAmount = availableCash
             .multiply(sizePct)
             .divide(new BigDecimal("100"), 8, RoundingMode.HALF_UP);
 
         // Ensure we don't exceed available capital
-        if (investAmount.compareTo(availableCapital) > 0) {
-            investAmount = availableCapital;
+        if (investAmount.compareTo(availableCash) > 0) {
+            investAmount = availableCash;
         }
 
         // Calculate quantity
@@ -183,8 +182,7 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
             signal.getRsi(), signal.getPriceDrop(),
             dcaPosition.isEmpty() ? "N/A" : dcaPosition.getAvgEntryPrice());
 
-        // Deduct from available capital now (before position opens)
-        availableCapital = availableCapital.subtract(investAmount);
+        // NOTE: Don't modify capital here - Portfolio.addPosition() will deduct cashBalance
 
         // Calculate what the new weighted average entry will be after this buy
         BigDecimal futureAvgEntry = dcaPosition.getTotalInvested().add(investAmount)
@@ -278,13 +276,11 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
             result.getRealizedPnL(),
             pendingExitQuantity.subtract(qtyToCloseFromThisPosition));
 
-        // Reinvest if configured
-        if (config.getReinvestment().isEnabled() && config.getReinvestment().isAddToAvailableCapital()) {
-            BigDecimal totalReturned = result.getRealizedPnL().add(result.getInvestedClosed());
-            availableCapital = availableCapital.add(totalReturned);
-            log.debug("Reinvested: P&L={}, invested_recovered={}, new_capital={}",
-                result.getRealizedPnL(), result.getInvestedClosed(), availableCapital);
-        }
+        // NOTE: Portfolio.closePartialPosition() already adds proceeds to cashBalance
+        // No need to modify availableCapital here (it would cause double-counting)
+        log.debug("P&L from close: {}, invested_recovered={}, total_proceeds={}",
+            result.getRealizedPnL(), result.getInvestedClosed(),
+            result.getRealizedPnL().add(result.getInvestedClosed()));
 
         // Reduce pending exit quantity
         pendingExitQuantity = pendingExitQuantity.subtract(qtyToCloseFromThisPosition);
@@ -339,17 +335,13 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
     /**
      * Update drawdown pause/resume state
      */
-    private void updateDrawdownState(BigDecimal currentPrice, long timestamp) {
+    private void updateDrawdownState(Portfolio portfolio, BigDecimal currentPrice, long timestamp) {
         if (!config.getRiskManagement().getDrawdownAction().isEnabled()) {
             return;
         }
 
-        BigDecimal currentEquity = availableCapital;
-        if (!dcaPosition.isEmpty()) {
-            currentEquity = currentEquity.add(
-                dcaPosition.getTotalQuantity().multiply(currentPrice)
-            );
-        }
+        // Use portfolio equity instead of tracking separately
+        BigDecimal currentEquity = portfolio.getEquity(currentPrice);
 
         // Calculate drawdown
         BigDecimal drawdown = peakEquity.subtract(currentEquity)
@@ -419,20 +411,20 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
     public AlgorithmState getState() {
         AlgorithmState state = new AlgorithmState();
         state.setAlgorithmName(getName());
-        state.putState("availableCapital", availableCapital);
         state.putState("peakEquity", peakEquity);
         state.putState("buyingPaused", buyingPaused);
         state.putState("pauseStartTimestamp", pauseStartTimestamp);
         // Note: Full DCAPosition serialization would need custom logic
+        // Note: availableCapital removed - use portfolio.getCashBalance() instead
         return state;
     }
 
     @Override
     public void restoreState(AlgorithmState state) {
-        this.availableCapital = state.getStateOrDefault("availableCapital", config.getStartingCapital());
         this.peakEquity = state.getStateOrDefault("peakEquity", config.getStartingCapital());
         this.buyingPaused = state.getStateOrDefault("buyingPaused", false);
         this.pauseStartTimestamp = state.getStateOrDefault("pauseStartTimestamp", 0L);
         // Note: Full DCAPosition restoration would need custom logic
+        // Note: availableCapital removed - use portfolio.getCashBalance() instead
     }
 }
