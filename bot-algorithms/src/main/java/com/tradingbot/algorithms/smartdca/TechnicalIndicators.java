@@ -28,8 +28,10 @@ public class TechnicalIndicators {
         BigDecimal avgGain = BigDecimal.ZERO;
         BigDecimal avgLoss = BigDecimal.ZERO;
 
-        // Initial average gain/loss over first 'period' changes
-        for (int i = candles.size() - period - 1; i < candles.size(); i++) {
+        // Initial average gain/loss over 'period' changes
+        // We need period changes, so start from index where we can safely do i-1
+        int startIdx = candles.size() - period;  // This gives us 'period' iterations
+        for (int i = startIdx; i < candles.size(); i++) {
             BigDecimal change = candles.get(i).close().subtract(candles.get(i - 1).close());
             if (change.compareTo(BigDecimal.ZERO) > 0) {
                 avgGain = avgGain.add(change);
