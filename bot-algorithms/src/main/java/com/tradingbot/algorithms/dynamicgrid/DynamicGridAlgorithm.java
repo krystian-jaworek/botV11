@@ -105,7 +105,7 @@ public class DynamicGridAlgorithm implements TradingAlgorithm<DynamicGridConfig>
         for (int i = 1; i <= levelsBelow; i++) {
             BigDecimal multiplier = BigDecimal.ONE
                 .subtract(config.getGridSpacingPercent().divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP));
-            BigDecimal price = startPrice.multiply(pow(multiplier, i));
+            BigDecimal price = startPrice.multiply(pow(multiplier, i)).setScale(2, RoundingMode.HALF_UP);
 
             GridLevel level = new GridLevel(price, "buy", -i);
             level.setTakeProfitPrice(calculateTakeProfit(price));
@@ -120,7 +120,7 @@ public class DynamicGridAlgorithm implements TradingAlgorithm<DynamicGridConfig>
         for (int i = 1; i <= levelsAbove; i++) {
             BigDecimal multiplier = BigDecimal.ONE
                 .add(config.getGridSpacingPercent().divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP));
-            BigDecimal price = startPrice.multiply(pow(multiplier, i));
+            BigDecimal price = startPrice.multiply(pow(multiplier, i)).setScale(2, RoundingMode.HALF_UP);
 
             GridLevel level = new GridLevel(price, "sell", i);
             gridLevels.add(level);
@@ -135,13 +135,14 @@ public class DynamicGridAlgorithm implements TradingAlgorithm<DynamicGridConfig>
         for (int i = 0; i < exponent; i++) {
             result = result.multiply(base);
         }
-        return result;
+        return result.setScale(8, RoundingMode.HALF_UP);
     }
 
     private BigDecimal calculateTakeProfit(BigDecimal entryPrice) {
-        return entryPrice.multiply(
-            BigDecimal.ONE.add(config.getTakeProfitPercent().divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP))
-        );
+        return entryPrice
+            .multiply(BigDecimal.ONE.add(
+                config.getTakeProfitPercent().divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP)))
+            .setScale(2, RoundingMode.HALF_UP);
     }
 
     private GridLevel getBottomLevel() {
@@ -220,12 +221,12 @@ public class DynamicGridAlgorithm implements TradingAlgorithm<DynamicGridConfig>
         // 3. Check bottom breach
         GridLevel bottomLevel = getBottomLevel();
         while (currentPrice.compareTo(bottomLevel.getPrice()) < 0) {
-            log.info("Bottom breach! Price {} < bottom level {}", currentPrice, bottomLevel.getPrice());
+            log.debug("Bottom breach! Price {} < bottom level {}", currentPrice, bottomLevel.getPrice());
 
             // Close oldest position if exists
             if (!openPositionsQueue.isEmpty()) {
                 TrackedPosition oldest = openPositionsQueue.peekFirst();
-                log.info("Closing oldest position {} (entry: {}) at price {}",
+                log.debug("Closing oldest position {} (entry: {}) at price {}",
                     oldest.getPositionId(), oldest.getEntryPrice(), currentPrice);
 
                 return new TradingDecision.ClosePosition(
@@ -235,9 +236,10 @@ public class DynamicGridAlgorithm implements TradingAlgorithm<DynamicGridConfig>
             }
 
             // Add new bottom level
-            BigDecimal newBottomPrice = bottomLevel.getPrice().multiply(
-                BigDecimal.ONE.subtract(config.getGridSpacingPercent().divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP))
-            );
+            BigDecimal newBottomPrice = bottomLevel.getPrice()
+                .multiply(BigDecimal.ONE.subtract(
+                    config.getGridSpacingPercent().divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP)))
+                .setScale(2, RoundingMode.HALF_UP);
 
             GridLevel newLevel = new GridLevel(newBottomPrice, "buy", bottomLevel.getLevelIndex() - 1);
             newLevel.setTakeProfitPrice(calculateTakeProfit(newBottomPrice));
@@ -248,24 +250,25 @@ public class DynamicGridAlgorithm implements TradingAlgorithm<DynamicGridConfig>
             gridLevels.remove(bottomLevel);
             filledLevels.remove(bottomLevel);
 
-            log.info("Added new bottom level at {}, removed old at {}", newBottomPrice, bottomLevel.getPrice());
+            log.debug("Added new bottom level at {}, removed old at {}", newBottomPrice, bottomLevel.getPrice());
 
             bottomLevel = getBottomLevel();
         }
 
         // 4. Check top expansion
         GridLevel topLevel = getTopLevel();
-        BigDecimal topTriggerPrice = topLevel.getPrice().multiply(
-            BigDecimal.ONE.add(config.getTopTriggerPercent().divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP))
-        );
+        BigDecimal topTriggerPrice = topLevel.getPrice()
+            .multiply(BigDecimal.ONE.add(
+                config.getTopTriggerPercent().divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP)))
+            .setScale(2, RoundingMode.HALF_UP);
 
         if (currentPrice.compareTo(topTriggerPrice) > 0) {
-            log.info("Top expansion! Price {} > trigger {}", currentPrice, topTriggerPrice);
+            log.debug("Top expansion! Price {} > trigger {}", currentPrice, topTriggerPrice);
 
             // Close oldest position if exists
             if (!openPositionsQueue.isEmpty()) {
                 TrackedPosition oldest = openPositionsQueue.peekFirst();
-                log.info("Closing oldest position {} (entry: {}) at price {} for top expansion",
+                log.debug("Closing oldest position {} (entry: {}) at price {} for top expansion",
                     oldest.getPositionId(), oldest.getEntryPrice(), currentPrice);
 
                 return new TradingDecision.ClosePosition(
@@ -275,15 +278,16 @@ public class DynamicGridAlgorithm implements TradingAlgorithm<DynamicGridConfig>
             }
 
             // Add new top level
-            BigDecimal newTopPrice = topLevel.getPrice().multiply(
-                BigDecimal.ONE.add(config.getGridSpacingPercent().divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP))
-            );
+            BigDecimal newTopPrice = topLevel.getPrice()
+                .multiply(BigDecimal.ONE.add(
+                    config.getGridSpacingPercent().divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP)))
+                .setScale(2, RoundingMode.HALF_UP);
 
             GridLevel newLevel = new GridLevel(newTopPrice, "sell", topLevel.getLevelIndex() + 1);
             gridLevels.add(newLevel);
             gridLevels.sort(Comparator.comparing(GridLevel::getPrice));
 
-            log.info("Added new top level at {}", newTopPrice);
+            log.debug("Added new top level at {}", newTopPrice);
         }
 
         return TradingDecision.Hold.INSTANCE;
