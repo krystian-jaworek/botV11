@@ -5,6 +5,7 @@ import lombok.Value;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.List;
 
 /**
  * Immutable container for simulation metrics.
@@ -45,6 +46,9 @@ public class SimulationResult {
     // Drawdown metrics
     BigDecimal maxPositionDrawdownPercentage;  // Max % drop in single position
     BigDecimal maxPortfolioDrawdownPercentage; // Max % drop from peak equity
+
+    // Order history
+    List<FilledOrder> filledOrders;  // Complete history of all filled orders
 
     /**
      * Calculate profit absolute from initial and final

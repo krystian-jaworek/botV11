@@ -6,6 +6,7 @@ import com.tradingbot.backtest.reporting.SimulationEventListener;
 import com.tradingbot.core.algorithms.OrderExecutor;
 import com.tradingbot.core.algorithms.TradingAlgorithm;
 import com.tradingbot.core.algorithms.TradingDecision;
+import com.tradingbot.core.metrics.FilledOrder;
 import com.tradingbot.core.metrics.MetricsCalculator;
 import com.tradingbot.core.metrics.SimulationResult;
 import com.tradingbot.core.models.Candle;
@@ -74,6 +75,9 @@ public class BacktestEngine {
         MetricsCalculator.PortfolioDrawdownTracker portfolioTracker =
             new MetricsCalculator.PortfolioDrawdownTracker(initialBalance);
 
+        // Order history tracker
+        List<FilledOrder> filledOrders = new ArrayList<>();
+
         // Initialize algorithm with first candle price
         Candle firstCandle = candles.get(0);
         algorithm.initialize(firstCandle.close());
@@ -131,7 +135,7 @@ public class BacktestEngine {
             TradingDecision decision = algorithm.onCandle(currentCandle, portfolio);
 
             // Execute decision
-            executeDecision(decision, orderExecutor, currentCandle, portfolio, algorithm);
+            executeDecision(decision, orderExecutor, currentCandle, portfolio, algorithm, filledOrders);
 
             // Move to next candle
             if (dataProvider.hasNext()) {
@@ -153,7 +157,8 @@ public class BacktestEngine {
             positionTracker,
             portfolioTracker,
             interrupted,
-            interruptionReason
+            interruptionReason,
+            filledOrders
         );
 
         log.debug("Backtest completed. Profit: {} ({}%)",
@@ -169,7 +174,7 @@ public class BacktestEngine {
      */
     private void executeDecision(TradingDecision decision, OrderExecutor executor,
                                  Candle currentCandle, Portfolio portfolio,
-                                 TradingAlgorithm<?> algorithm) {
+                                 TradingAlgorithm<?> algorithm, List<FilledOrder> filledOrders) {
         switch (decision) {
             case TradingDecision.OpenPosition open -> {
                 Position position = executor.openPosition(
@@ -179,6 +184,19 @@ public class BacktestEngine {
                     currentCandle.timestamp(),
                     open.metadata()
                 );
+
+                // Record filled order (OPEN)
+                FilledOrder filledOrder = FilledOrder.builder()
+                    .timestamp(currentCandle.timestamp())
+                    .type(FilledOrder.OrderType.OPEN)
+                    .positionId(position.getId())
+                    .price(position.getEntryPrice())
+                    .avgEntry(position.getEntryPrice())
+                    .quantity(position.getQuantity())
+                    .realizedPnL(null)
+                    .build();
+                filledOrders.add(filledOrder);
+
                 algorithm.onPositionOpened(position);
                 notifyPositionOpened(position, currentCandle, portfolio);
             }
@@ -190,6 +208,19 @@ public class BacktestEngine {
                         close.price(),
                         currentCandle.timestamp()
                     );
+
+                    // Record filled order (CLOSE)
+                    FilledOrder filledOrder = FilledOrder.builder()
+                        .timestamp(currentCandle.timestamp())
+                        .type(FilledOrder.OrderType.CLOSE)
+                        .positionId(closedPosition.getId())
+                        .price(close.price())
+                        .avgEntry(closedPosition.getEntryPrice())
+                        .quantity(closedPosition.getQuantity())
+                        .realizedPnL(closedPosition.getRealizedPnL())
+                        .build();
+                    filledOrders.add(filledOrder);
+
                     algorithm.onPositionClosed(closedPosition);
                     notifyPositionClosed(closedPosition, currentCandle, portfolio);
                 } else {
@@ -205,6 +236,19 @@ public class BacktestEngine {
                         partial.price(),
                         currentCandle.timestamp()
                     );
+
+                    // Record filled order (CLOSE PARTIAL)
+                    FilledOrder filledOrder = FilledOrder.builder()
+                        .timestamp(currentCandle.timestamp())
+                        .type(FilledOrder.OrderType.CLOSE)
+                        .positionId(closedPosition.getId())
+                        .price(partial.price())
+                        .avgEntry(closedPosition.getEntryPrice())
+                        .quantity(closedPosition.getQuantity())
+                        .realizedPnL(closedPosition.getRealizedPnL())
+                        .build();
+                    filledOrders.add(filledOrder);
+
                     algorithm.onPositionClosed(closedPosition);
                     notifyPositionClosed(closedPosition, currentCandle, portfolio);
                 } else {

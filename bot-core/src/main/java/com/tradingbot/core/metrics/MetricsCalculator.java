@@ -5,6 +5,7 @@ import com.tradingbot.core.models.Position;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.List;
 
 /**
  * Utility class for calculating trading metrics during simulation.
@@ -95,7 +96,8 @@ public class MetricsCalculator {
         PositionDrawdownTracker positionTracker,
         PortfolioDrawdownTracker portfolioTracker,
         boolean interrupted,
-        String interruptionReason
+        String interruptionReason,
+        List<FilledOrder> filledOrders
     ) {
         BigDecimal finalEquity = portfolio.getEquity(finalPrice);
         BigDecimal profitAbsolute = SimulationResult.calculateProfitAbsolute(initialBalance, finalEquity);
@@ -123,6 +125,7 @@ public class MetricsCalculator {
             .minCashBalance(portfolio.getMinCashBalance())
             .maxPositionDrawdownPercentage(positionTracker.getMaxDrawdown())
             .maxPortfolioDrawdownPercentage(portfolioTracker.getMaxDrawdownPercentage())
+            .filledOrders(filledOrders)
             .build();
     }
 }
