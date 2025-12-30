@@ -35,31 +35,26 @@ public class DynamicGridConfig implements AlgorithmConfig {
     BigDecimal takeProfitPercent;
 
     /**
-     * Percentage of available capital to use per position
-     * Example: 10.0 = 10% of available balance per position
+     * Total percentage of portfolio allocated to the entire grid
+     * This amount is divided equally among all grid levels
+     * Example: 80.0 = 80% of portfolio divided by gridLevels
      */
-    BigDecimal positionSizePercent;
+    BigDecimal totalGridCapitalPercent;
 
     /**
      * Trigger percentage above top level to expand grid upward
-     * Example: 0.5 = expand when price > top_level × 1.005
+     * Example: 5.0 = expand when price > top_level × 1.05
      */
     BigDecimal topTriggerPercent;
-
-    /**
-     * Whether to use fixed position sizing (based on initial capital)
-     * or dynamic sizing (based on current available capital)
-     */
-    boolean useFixedPositionSize;
 
     @Override
     public String getConfigId() {
         return String.format(
-            "DynamicGrid[levels=%d,spacing=%.2f%%,tp=%.2f%%,size=%.2f%%,trigger=%.2f%%]",
+            "DynamicGrid[levels=%d,spacing=%.2f%%,tp=%.2f%%,gridCapital=%.2f%%,trigger=%.2f%%]",
             gridLevels,
             gridSpacingPercent,
             takeProfitPercent,
-            positionSizePercent,
+            totalGridCapitalPercent,
             topTriggerPercent
         );
     }
@@ -72,9 +67,8 @@ public class DynamicGridConfig implements AlgorithmConfig {
             .gridLevels(10)
             .gridSpacingPercent(new BigDecimal("1.0"))
             .takeProfitPercent(new BigDecimal("2.0"))
-            .positionSizePercent(new BigDecimal("10.0"))
-            .topTriggerPercent(new BigDecimal("0.5"))
-            .useFixedPositionSize(false)
+            .totalGridCapitalPercent(new BigDecimal("80.0"))
+            .topTriggerPercent(new BigDecimal("5.0"))
             .build();
     }
 
@@ -91,9 +85,9 @@ public class DynamicGridConfig implements AlgorithmConfig {
         if (takeProfitPercent.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Take profit must be positive");
         }
-        if (positionSizePercent.compareTo(BigDecimal.ZERO) <= 0 ||
-            positionSizePercent.compareTo(new BigDecimal("100")) > 0) {
-            throw new IllegalArgumentException("Position size must be between 0 and 100");
+        if (totalGridCapitalPercent.compareTo(BigDecimal.ZERO) <= 0 ||
+            totalGridCapitalPercent.compareTo(new BigDecimal("100")) > 0) {
+            throw new IllegalArgumentException("Total grid capital must be between 0 and 100");
         }
         if (topTriggerPercent.compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("Top trigger must be non-negative");

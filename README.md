@@ -110,7 +110,7 @@ java -cp bot-backtest/target/bot-backtest.jar com.tradingbot.backtest.runners.Dy
 java -cp bot-backtest/target/bot-backtest.jar com.tradingbot.backtest.runners.DynamicGridSingleRunner ETHUSDT-1-365.txt
 ```
 
-**Permutation Mode (~1,000 simulations):**
+**Permutation Mode (~500 simulations):**
 ```bash
 # Default (BTCUSDT-1-365.txt, MongoDB enabled)
 java -cp bot-backtest/target/bot-backtest.jar com.tradingbot.backtest.runners.DynamicGridPermutationRunner
@@ -151,11 +151,10 @@ Unlike static GridBot, DynamicGrid adapts to market conditions:
 - Grid levels: 10, 15, 20 (3 values)
 - Grid spacing: 0.5%, 1.0%, 1.5%, 2.0% (4 values)
 - Take profit: 1.0%, 1.5%, 2.0%, 2.5%, 3.0% (5 values)
-- Position size: 5%, 10%, 15% (3 values)
-- Top trigger: 0.3%, 0.5%, 0.7% (3 values)
-- Fixed sizing: [dynamic, fixed] (2 values)
+- Total grid capital: 60%, 75%, 90% of portfolio (3 values) - divided equally among positions
+- Top trigger: 5.0%, 7.5%, 10.0% above top level (3 values)
 
-**Total:** 3 × 4 × 5 × 3 × 3 × 2 = **1,080 simulations**
+**Total:** 3 × 4 × 5 × 3 × 3 = **540 simulations**
 
 **Features:**
 - Java 21 Virtual Threads for parallel execution

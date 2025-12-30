@@ -17,7 +17,7 @@ import java.util.List;
 /**
  * DynamicGrid-specific permutation runner for parallel parameter sweep simulations.
  *
- * Runs ~1,000 DynamicGrid simulations with different parameter combinations using Virtual Threads.
+ * Runs ~500 DynamicGrid simulations with different parameter combinations using Virtual Threads.
  *
  * Usage: [candle-file] [save-to-mongodb]
  *
@@ -40,10 +40,9 @@ import java.util.List;
  * - Grid levels: 10-20 (step 5) = 3 values
  * - Grid spacing: 0.5-2.0% (step 0.5) = 4 values
  * - Take profit: 1.0-3.0% (step 0.5) = 5 values
- * - Position size: 5-15% (step 5) = 3 values
- * - Top trigger: 0.3-0.7% (step 0.2) = 3 values
- * - Fixed size: [false, true] = 2 values
- * Total: 3 * 4 * 5 * 3 * 3 * 2 = 1,080 simulations
+ * - Total grid capital: 60-90% (step 15) = 3 values
+ * - Top trigger: 5-10% (step 2.5) = 3 values
+ * Total: 3 * 4 * 5 * 3 * 3 = 540 simulations
  */
 @Slf4j
 public class DynamicGridPermutationRunner {

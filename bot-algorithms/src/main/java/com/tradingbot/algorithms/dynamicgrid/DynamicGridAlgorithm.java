@@ -33,7 +33,6 @@ public class DynamicGridAlgorithm implements TradingAlgorithm<DynamicGridConfig>
     private final Map<String, TrackedPosition> positionById;
     private final Set<GridLevel> filledLevels;
     private BigDecimal initialCapital;
-    private BigDecimal fixedPositionSize;
 
     @Data
     private static class GridLevel {
@@ -83,11 +82,11 @@ public class DynamicGridAlgorithm implements TradingAlgorithm<DynamicGridConfig>
         // Initial capital will be set on first candle
         initializeGrid(initialPrice);
 
-        log.debug("DynamicGrid initialized with {} levels, spacing={}%, tp={}%, size={}%",
+        log.debug("DynamicGrid initialized with {} levels, spacing={}%, tp={}%, gridCapital={}%",
             config.getGridLevels(),
             config.getGridSpacingPercent(),
             config.getTakeProfitPercent(),
-            config.getPositionSizePercent());
+            config.getTotalGridCapitalPercent());
         log.debug("Initial price: {}, Bottom level: {}, Top level: {}",
             initialPrice,
             getBottomLevel().getPrice(),
@@ -165,11 +164,6 @@ public class DynamicGridAlgorithm implements TradingAlgorithm<DynamicGridConfig>
         // Initialize capital on first candle
         if (initialCapital == null) {
             initialCapital = portfolio.getCashBalance();
-            if (config.isUseFixedPositionSize()) {
-                fixedPositionSize = initialCapital
-                    .multiply(config.getPositionSizePercent())
-                    .divide(BigDecimal.valueOf(100), RoundingMode.HALF_UP);
-            }
         }
 
         // 1. Check TP for all open positions
@@ -190,15 +184,11 @@ public class DynamicGridAlgorithm implements TradingAlgorithm<DynamicGridConfig>
                 if (currentPrice.compareTo(level.getPrice()) <= 0) {
                     log.debug("Buy level hit at price {} (level: {})", currentPrice, level.getPrice());
 
-                    // Calculate position size
-                    BigDecimal positionValue;
-                    if (config.isUseFixedPositionSize()) {
-                        positionValue = fixedPositionSize;
-                    } else {
-                        positionValue = portfolio.getCashBalance()
-                            .multiply(config.getPositionSizePercent())
-                            .divide(BigDecimal.valueOf(100), RoundingMode.HALF_UP);
-                    }
+                    // Calculate position size: (initialCapital * totalGridCapitalPercent / 100) / gridLevels
+                    BigDecimal positionValue = initialCapital
+                        .multiply(config.getTotalGridCapitalPercent())
+                        .divide(BigDecimal.valueOf(100), RoundingMode.HALF_UP)
+                        .divide(BigDecimal.valueOf(config.getGridLevels()), RoundingMode.HALF_UP);
 
                     if (positionValue.compareTo(portfolio.getCashBalance()) > 0) {
                         log.debug("Insufficient balance for position");
@@ -382,11 +372,6 @@ public class DynamicGridAlgorithm implements TradingAlgorithm<DynamicGridConfig>
         String initialCapitalStr = (String) state.getStateData().get("initialCapital");
         if (initialCapitalStr != null) {
             initialCapital = new BigDecimal(initialCapitalStr);
-            if (config.isUseFixedPositionSize()) {
-                fixedPositionSize = initialCapital
-                    .multiply(config.getPositionSizePercent())
-                    .divide(BigDecimal.valueOf(100), RoundingMode.HALF_UP);
-            }
         }
 
         log.debug("DynamicGrid state restored with {} levels, {} open positions",
