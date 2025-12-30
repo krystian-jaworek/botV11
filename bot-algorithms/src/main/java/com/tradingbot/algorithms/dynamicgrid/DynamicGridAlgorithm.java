@@ -1,5 +1,6 @@
 package com.tradingbot.algorithms.dynamicgrid;
 
+import com.tradingbot.core.algorithms.AlgorithmState;
 import com.tradingbot.core.algorithms.TradingAlgorithm;
 import com.tradingbot.core.algorithms.TradingDecision;
 import com.tradingbot.core.models.Candle;
@@ -54,7 +55,7 @@ public class DynamicGridAlgorithm implements TradingAlgorithm<DynamicGridConfig>
         private final BigDecimal entryPrice;
         private final BigDecimal quantity;
         private final BigDecimal takeProfitPrice;
-        private final long entryTimestamp;
+        private final long openTimestamp;
         private final int gridLevelIndex;
     }
 
@@ -78,16 +79,9 @@ public class DynamicGridAlgorithm implements TradingAlgorithm<DynamicGridConfig>
     }
 
     @Override
-    public void initialize(Portfolio portfolio, Candle firstCandle) {
-        this.initialCapital = portfolio.getCashBalance();
-
-        if (config.isUseFixedPositionSize()) {
-            this.fixedPositionSize = initialCapital
-                .multiply(config.getPositionSizePercent())
-                .divide(BigDecimal.valueOf(100), RoundingMode.HALF_UP);
-        }
-
-        initializeGrid(firstCandle.close());
+    public void initialize(BigDecimal initialPrice) {
+        // Initial capital will be set on first candle
+        initializeGrid(initialPrice);
 
         log.info("DynamicGrid initialized with {} levels, spacing={}%, tp={}%, size={}%",
             config.getGridLevels(),
@@ -95,7 +89,7 @@ public class DynamicGridAlgorithm implements TradingAlgorithm<DynamicGridConfig>
             config.getTakeProfitPercent(),
             config.getPositionSizePercent());
         log.info("Initial price: {}, Bottom level: {}, Top level: {}",
-            firstCandle.close(),
+            initialPrice,
             getBottomLevel().getPrice(),
             getTopLevel().getPrice());
     }
@@ -167,15 +161,24 @@ public class DynamicGridAlgorithm implements TradingAlgorithm<DynamicGridConfig>
     public TradingDecision onCandle(Candle candle, Portfolio portfolio) {
         BigDecimal currentPrice = candle.close();
 
+        // Initialize capital on first candle
+        if (initialCapital == null) {
+            initialCapital = portfolio.getCashBalance();
+            if (config.isUseFixedPositionSize()) {
+                fixedPositionSize = initialCapital
+                    .multiply(config.getPositionSizePercent())
+                    .divide(BigDecimal.valueOf(100), RoundingMode.HALF_UP);
+            }
+        }
+
         // 1. Check TP for all open positions
         for (TrackedPosition tracked : new ArrayList<>(openPositionsQueue)) {
             if (currentPrice.compareTo(tracked.getTakeProfitPrice()) >= 0) {
                 log.debug("TP hit for position {} at price {} (target: {})",
                     tracked.getPositionId(), currentPrice, tracked.getTakeProfitPrice());
-                return TradingDecision.closePosition(
+                return new TradingDecision.ClosePosition(
                     tracked.getPositionId(),
-                    tracked.getTakeProfitPrice(),
-                    "Take Profit"
+                    tracked.getTakeProfitPrice()
                 );
             }
         }
@@ -204,8 +207,8 @@ public class DynamicGridAlgorithm implements TradingAlgorithm<DynamicGridConfig>
                     BigDecimal quantity = positionValue.divide(level.getPrice(), 8, RoundingMode.HALF_UP);
 
                     filledLevels.add(level);
-                    return TradingDecision.openPosition(
-                        OrderSide.BUY,
+                    return new TradingDecision.OpenPosition(
+                        OrderSide.LONG,
                         quantity,
                         level.getPrice(),
                         "Grid Level " + level.getLevelIndex()
@@ -225,10 +228,9 @@ public class DynamicGridAlgorithm implements TradingAlgorithm<DynamicGridConfig>
                 log.info("Closing oldest position {} (entry: {}) at price {}",
                     oldest.getPositionId(), oldest.getEntryPrice(), currentPrice);
 
-                return TradingDecision.closePosition(
+                return new TradingDecision.ClosePosition(
                     oldest.getPositionId(),
-                    currentPrice,
-                    "Bottom Breach"
+                    currentPrice
                 );
             }
 
@@ -266,10 +268,9 @@ public class DynamicGridAlgorithm implements TradingAlgorithm<DynamicGridConfig>
                 log.info("Closing oldest position {} (entry: {}) at price {} for top expansion",
                     oldest.getPositionId(), oldest.getEntryPrice(), currentPrice);
 
-                return TradingDecision.closePosition(
+                return new TradingDecision.ClosePosition(
                     oldest.getPositionId(),
-                    currentPrice,
-                    "Top Expansion"
+                    currentPrice
                 );
             }
 
@@ -285,7 +286,104 @@ public class DynamicGridAlgorithm implements TradingAlgorithm<DynamicGridConfig>
             log.info("Added new top level at {}", newTopPrice);
         }
 
-        return TradingDecision.hold();
+        return TradingDecision.Hold.INSTANCE;
+    }
+
+    @Override
+    public AlgorithmState getState() {
+        AlgorithmState state = new AlgorithmState(getName());
+
+        // Save grid levels
+        List<Map<String, Object>> gridLevelsList = new ArrayList<>();
+        for (GridLevel level : gridLevels) {
+            Map<String, Object> levelMap = new HashMap<>();
+            levelMap.put("price", level.getPrice().toString());
+            levelMap.put("type", level.getType());
+            levelMap.put("levelIndex", level.getLevelIndex());
+            if (level.getTakeProfitPrice() != null) {
+                levelMap.put("takeProfitPrice", level.getTakeProfitPrice().toString());
+            }
+            gridLevelsList.add(levelMap);
+        }
+        state.putState("gridLevels", gridLevelsList);
+
+        // Save open positions queue
+        List<Map<String, Object>> positionsQueueList = new ArrayList<>();
+        for (TrackedPosition tracked : openPositionsQueue) {
+            Map<String, Object> posMap = new HashMap<>();
+            posMap.put("positionId", tracked.getPositionId());
+            posMap.put("entryPrice", tracked.getEntryPrice().toString());
+            posMap.put("quantity", tracked.getQuantity().toString());
+            posMap.put("takeProfitPrice", tracked.getTakeProfitPrice().toString());
+            posMap.put("openTimestamp", tracked.getOpenTimestamp());
+            posMap.put("gridLevelIndex", tracked.getGridLevelIndex());
+            positionsQueueList.add(posMap);
+        }
+        state.putState("openPositionsQueue", positionsQueueList);
+
+        // Save initial capital
+        if (initialCapital != null) {
+            state.putState("initialCapital", initialCapital.toString());
+        }
+
+        return state;
+    }
+
+    @Override
+    public void restoreState(AlgorithmState state) {
+        log.info("Restoring DynamicGrid state");
+
+        // Restore grid levels
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> gridLevelsList = (List<Map<String, Object>>) state.getStateData().get("gridLevels");
+        if (gridLevelsList != null) {
+            gridLevels.clear();
+            for (Map<String, Object> levelMap : gridLevelsList) {
+                BigDecimal price = new BigDecimal((String) levelMap.get("price"));
+                String type = (String) levelMap.get("type");
+                int levelIndex = (Integer) levelMap.get("levelIndex");
+                GridLevel level = new GridLevel(price, type, levelIndex);
+
+                if (levelMap.containsKey("takeProfitPrice")) {
+                    level.setTakeProfitPrice(new BigDecimal((String) levelMap.get("takeProfitPrice")));
+                }
+                gridLevels.add(level);
+            }
+        }
+
+        // Restore open positions queue
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> positionsQueueList = (List<Map<String, Object>>) state.getStateData().get("openPositionsQueue");
+        if (positionsQueueList != null) {
+            openPositionsQueue.clear();
+            positionById.clear();
+            for (Map<String, Object> posMap : positionsQueueList) {
+                TrackedPosition tracked = new TrackedPosition(
+                    (String) posMap.get("positionId"),
+                    new BigDecimal((String) posMap.get("entryPrice")),
+                    new BigDecimal((String) posMap.get("quantity")),
+                    new BigDecimal((String) posMap.get("takeProfitPrice")),
+                    ((Number) posMap.get("openTimestamp")).longValue(),
+                    (Integer) posMap.get("gridLevelIndex")
+                );
+                openPositionsQueue.add(tracked);
+                positionById.put(tracked.getPositionId(), tracked);
+            }
+        }
+
+        // Restore initial capital
+        String initialCapitalStr = (String) state.getStateData().get("initialCapital");
+        if (initialCapitalStr != null) {
+            initialCapital = new BigDecimal(initialCapitalStr);
+            if (config.isUseFixedPositionSize()) {
+                fixedPositionSize = initialCapital
+                    .multiply(config.getPositionSizePercent())
+                    .divide(BigDecimal.valueOf(100), RoundingMode.HALF_UP);
+            }
+        }
+
+        log.info("DynamicGrid state restored with {} levels, {} open positions",
+            gridLevels.size(), openPositionsQueue.size());
     }
 
     @Override
@@ -295,7 +393,7 @@ public class DynamicGridAlgorithm implements TradingAlgorithm<DynamicGridConfig>
             position.getEntryPrice(),
             position.getQuantity(),
             calculateTakeProfit(position.getEntryPrice()),
-            position.getEntryTimestamp(),
+            position.getOpenTimestamp(),
             0  // Level index would need to be stored
         );
 
@@ -308,14 +406,14 @@ public class DynamicGridAlgorithm implements TradingAlgorithm<DynamicGridConfig>
 
     @Override
     public void onPositionClosed(ClosedPosition closedPosition) {
-        TrackedPosition tracked = positionById.remove(closedPosition.getPositionId());
+        TrackedPosition tracked = positionById.remove(closedPosition.getId());
         if (tracked != null) {
             openPositionsQueue.remove(tracked);
             log.debug("Position closed: {} at {} (entry: {}), PnL: {}, queue size: {}",
-                closedPosition.getPositionId(),
+                closedPosition.getId(),
                 closedPosition.getExitPrice(),
                 closedPosition.getEntryPrice(),
-                closedPosition.getProfitLoss(),
+                closedPosition.getRealizedPnL(),
                 openPositionsQueue.size());
         }
     }
