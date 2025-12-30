@@ -175,21 +175,13 @@ public class SmartDCAPermutationRunner {
                 config.getBuyConditions().getRsi().getOversoldThreshold());
             System.out.printf("  Min Price Drop: %.1f%%%n",
                 config.getBuyConditions().getPriceDrop().getMinFromLastBuyPct());
-            System.out.printf("  Volume Spike Multiplier: %.1fx%n",
-                config.getBuyConditions().getVolume().getSpikeMultiplier());
             System.out.printf("  Tier 1 Size: %.1f%%%n",
                 config.getPositionSizing().getTiers().get(0).getSizePct());
             System.out.println();
-            System.out.printf("Profit: %.2f%% | Sharpe: %.3f | Max DD: %.2f%% | Trades: %d | Win Rate: %.1f%%%n",
+            System.out.printf("Profit: %.2f%% | Max DD: %.2f%% | Trades: %d%n",
                 result.getProfitPercentage(),
-                result.getSharpeRatio(),
-                result.getMaxDrawdownPercentage(),
-                result.getTotalTrades(),
-                result.getWinRate());
-
-            if (result.getMongoId() != null) {
-                System.out.printf("MongoDB ID: %s%n", result.getMongoId());
-            }
+                result.getMaxPortfolioDrawdownPercentage(),
+                result.getTotalTradesExecuted());
 
             System.out.println("-".repeat(80));
         }
