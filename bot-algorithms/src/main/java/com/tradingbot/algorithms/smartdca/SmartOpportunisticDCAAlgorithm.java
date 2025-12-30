@@ -54,6 +54,11 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
     private long pauseStartTimestamp;
     private BigDecimal priceAtPause;
 
+    // Pending exit state (for closing across multiple positions)
+    private BigDecimal pendingExitQuantity;
+    private BigDecimal pendingExitPercentage;
+    private String pendingExitReason;
+
     public SmartOpportunisticDCAAlgorithm(SmartDCAConfig config) {
         this.config = config;
         this.config.validate();
@@ -69,6 +74,10 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
         this.buyingPaused = false;
         this.pauseStartTimestamp = 0;
         this.priceAtPause = BigDecimal.ZERO;
+
+        this.pendingExitQuantity = BigDecimal.ZERO;
+        this.pendingExitPercentage = BigDecimal.ZERO;
+        this.pendingExitReason = null;
     }
 
     @Override
@@ -104,7 +113,12 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
         // Check drawdown pause/resume
         updateDrawdownState(currentPrice, candle.timestamp());
 
-        // 1. Check exit signals first
+        // 1. Handle pending exits first (close positions in FIFO order)
+        if (pendingExitQuantity.compareTo(BigDecimal.ZERO) > 0 && !dcaPosition.isEmpty()) {
+            return processPendingExit(portfolio, currentPrice);
+        }
+
+        // 2. Check for new exit signals
         if (!dcaPosition.isEmpty()) {
             BigDecimal ema200 = TechnicalIndicators.calculateEMAFull(candleHistory,
                 config.getBuyConditions().getEmaSupport().getPeriod());
@@ -112,13 +126,13 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
             List<ProfitManager.ExitSignal> exitSignals = profitManager.evaluateExits(
                 dcaPosition, candleHistory, candle, ema200);
 
-            // Process exit signals (take first one if multiple)
+            // Process exit signals (initiate pending exit)
             if (!exitSignals.isEmpty()) {
-                return executeExit(exitSignals.get(0), currentPrice, candle.timestamp());
+                return initiatePendingExit(exitSignals.get(0), currentPrice);
             }
         }
 
-        // 2. Check buy signals (if not paused and have capital)
+        // 3. Check buy signals (if not paused and have capital)
         if (!buyingPaused && availableCapital.compareTo(BigDecimal.ZERO) > 0) {
             BuySignalEvaluator.BuySignal buySignal = buyEvaluator.evaluate(
                 candleHistory,
@@ -183,42 +197,111 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
     }
 
     /**
-     * Execute an exit decision
+     * Initiate a pending exit (sets up state for multi-position closing)
      */
-    private TradingDecision executeExit(ProfitManager.ExitSignal signal,
-                                        BigDecimal price, long timestamp) {
+    private TradingDecision initiatePendingExit(ProfitManager.ExitSignal signal, BigDecimal price) {
+        // Calculate total quantity to close
+        BigDecimal totalQtyToClose = dcaPosition.getTotalQuantity()
+            .multiply(signal.getPercentageToClose())
+            .divide(new BigDecimal("100"), 8, RoundingMode.HALF_UP);
 
-        // Calculate quantity to close
-        DCAPosition.CloseResult result = dcaPosition.closePercentage(
-            signal.getPercentageToClose(), price);
+        // Set pending exit state
+        pendingExitQuantity = totalQtyToClose;
+        pendingExitPercentage = signal.getPercentageToClose();
+        pendingExitReason = signal.getReason();
 
-        log.info("EXIT: type={}, close_pct={}%, reason={}, qty={}, P&L={}, avg_entry={}",
+        log.info("EXIT INITIATED: type={}, close_pct={}%, reason={}, total_qty_to_close={}, avg_entry={}",
             signal.getType(), signal.getPercentageToClose(), signal.getReason(),
-            result.getQuantityClosed(), result.getRealizedPnL(), dcaPosition.getAvgEntryPrice());
+            totalQtyToClose, dcaPosition.getAvgEntryPrice());
+
+        // Process first close immediately
+        return processPendingExit(null, price);
+    }
+
+    /**
+     * Process pending exit by closing positions in FIFO order
+     */
+    private TradingDecision processPendingExit(Portfolio portfolio, BigDecimal price) {
+        // Get oldest position ID
+        String oldestPositionId = dcaPosition.getOldestPositionId();
+
+        if (oldestPositionId == null) {
+            log.error("No position ID found but pendingExitQuantity > 0 - resetting pending state");
+            pendingExitQuantity = BigDecimal.ZERO;
+            pendingExitReason = null;
+            return TradingDecision.Hold.INSTANCE;
+        }
+
+        // Get the actual position from portfolio to know its quantity
+        Position oldestPosition = portfolio != null ? portfolio.getOpenPositions().get(oldestPositionId) : null;
+
+        // Determine how much to close from this position
+        BigDecimal qtyToCloseFromThisPosition;
+        boolean closeFullPosition;
+
+        if (oldestPosition != null) {
+            BigDecimal availableQty = oldestPosition.getQuantity();
+
+            if (pendingExitQuantity.compareTo(availableQty) >= 0) {
+                // Close entire position
+                qtyToCloseFromThisPosition = availableQty;
+                closeFullPosition = true;
+            } else {
+                // Close partial
+                qtyToCloseFromThisPosition = pendingExitQuantity;
+                closeFullPosition = false;
+            }
+        } else {
+            // Portfolio not available (first call from initiate), assume we need to close partial
+            // We'll rely on the engine to handle the close, and onPositionClosed callback will update state
+            qtyToCloseFromThisPosition = pendingExitQuantity;
+            closeFullPosition = false;
+        }
+
+        // Calculate P&L and update DCAPosition proportionally
+        BigDecimal percentageOfTotal = qtyToCloseFromThisPosition
+            .divide(dcaPosition.getTotalQuantity(), 8, RoundingMode.HALF_UP)
+            .multiply(new BigDecimal("100"));
+
+        DCAPosition.CloseResult result = dcaPosition.closePercentage(percentageOfTotal, price);
+
+        log.info("EXIT EXECUTING: close_qty={}, position_id={}, full={}, P&L={}, remaining_pending={}",
+            qtyToCloseFromThisPosition,
+            oldestPositionId.substring(0, 8),
+            closeFullPosition,
+            result.getRealizedPnL(),
+            pendingExitQuantity.subtract(qtyToCloseFromThisPosition));
 
         // Reinvest if configured
         if (config.getReinvestment().isEnabled() && config.getReinvestment().isAddToAvailableCapital()) {
             BigDecimal totalReturned = result.getRealizedPnL().add(result.getInvestedClosed());
             availableCapital = availableCapital.add(totalReturned);
-            log.info("Reinvested: P&L={}, invested_recovered={}, new_capital={}",
+            log.debug("Reinvested: P&L={}, invested_recovered={}, new_capital={}",
                 result.getRealizedPnL(), result.getInvestedClosed(), availableCapital);
         }
 
-        // Get oldest position ID to close
-        String oldestPositionId = dcaPosition.getOldestPositionId();
+        // Reduce pending exit quantity
+        pendingExitQuantity = pendingExitQuantity.subtract(qtyToCloseFromThisPosition);
 
-        if (oldestPositionId == null) {
-            log.error("No position ID found for closing - this shouldn't happen!");
-            return TradingDecision.Hold.INSTANCE;
+        // Clear pending state if done
+        if (pendingExitQuantity.compareTo(new BigDecimal("0.00000001")) < 0) {
+            log.info("EXIT COMPLETED: {}%, reason={}", pendingExitPercentage, pendingExitReason);
+            pendingExitQuantity = BigDecimal.ZERO;
+            pendingExitPercentage = BigDecimal.ZERO;
+            pendingExitReason = null;
         }
 
-        // Return partial close decision
-        return new TradingDecision.ClosePositionPartial(
-            oldestPositionId,
-            result.getQuantityClosed(),
-            price,
-            signal.getReason()
-        );
+        // Return close decision
+        if (closeFullPosition) {
+            return new TradingDecision.ClosePositionFull(oldestPositionId, price, pendingExitReason);
+        } else {
+            return new TradingDecision.ClosePositionPartial(
+                oldestPositionId,
+                qtyToCloseFromThisPosition,
+                price,
+                pendingExitReason
+            );
+        }
     }
 
     /**
