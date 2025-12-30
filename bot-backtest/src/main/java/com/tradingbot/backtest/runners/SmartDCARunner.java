@@ -77,12 +77,15 @@ public class SmartDCARunner {
 
         log.info("Algorithm config: {}", config.getConfigId());
 
-        // Create backtest engine with console reporter
+        // Create backtest engine
+        BacktestEngine engine = new BacktestEngine(tradingPair, INITIAL_CAPITAL);
+
+        // Add console reporter as event listener
         ConsoleReporter reporter = new ConsoleReporter();
-        BacktestEngine engine = new BacktestEngine(algorithm, INITIAL_CAPITAL, reporter);
+        engine.addEventListener(reporter);
 
         // Run simulation
-        SimulationResult result = engine.run(candles);
+        SimulationResult result = engine.runSimulation(algorithm, candles);
 
         // Display results
         System.out.println("\n" + "=".repeat(80));
