@@ -1,5 +1,6 @@
 package com.tradingbot.backtest.reporting;
 
+import com.tradingbot.core.metrics.FilledOrder;
 import com.tradingbot.core.metrics.SimulationResult;
 import com.tradingbot.core.models.Candle;
 import com.tradingbot.core.models.ClosedPosition;
@@ -10,6 +11,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 /**
  * Console reporter for simulation events.
@@ -45,6 +47,8 @@ public class ConsoleReporter implements SimulationEventListener {
 
     @Override
     public void onPositionOpened(Position position, Candle candle, Portfolio portfolio) {
+        if (!verbose) return;
+
         String timestamp = DATE_FORMATTER.format(Instant.ofEpochMilli(candle.timestamp()));
 
         System.out.println("-".repeat(80));
@@ -67,6 +71,8 @@ public class ConsoleReporter implements SimulationEventListener {
 
     @Override
     public void onPositionClosed(ClosedPosition position, Candle candle, Portfolio portfolio) {
+        if (!verbose) return;
+
         String timestamp = DATE_FORMATTER.format(Instant.ofEpochMilli(candle.timestamp()));
 
         System.out.println("-".repeat(80));
@@ -155,6 +161,51 @@ public class ConsoleReporter implements SimulationEventListener {
         System.out.printf("Max Portfolio Drawdown: %.2f%%%n", result.getMaxPortfolioDrawdownPercentage());
 
         System.out.println("=".repeat(80));
+        System.out.println();
+
+        // Display filled orders table
+        printFilledOrdersTable(result.getFilledOrders());
+    }
+
+    /**
+     * Display filled orders in a table format, sorted by date
+     */
+    public static void printFilledOrdersTable(List<FilledOrder> filledOrders) {
+        if (filledOrders == null || filledOrders.isEmpty()) {
+            System.out.println("No filled orders to display.");
+            System.out.println();
+            return;
+        }
+
+        System.out.println("=".repeat(120));
+        System.out.println("FILLED ORDERS (CHRONOLOGICAL)");
+        System.out.println("=".repeat(120));
+        System.out.println();
+
+        // Header
+        System.out.printf("%-20s | %-6s | %-10s | %-12s | %-12s | %-12s | %-12s%n",
+            "Date/Time", "Type", "Pos ID", "Avg Entry", "Close Price", "Volume", "P&L");
+        System.out.println("-".repeat(120));
+
+        // Data rows
+        for (FilledOrder order : filledOrders) {
+            String timestamp = DATE_FORMATTER.format(Instant.ofEpochMilli(order.getTimestamp()));
+            String type = order.getType().toString();
+            String posId = order.getPositionId().substring(0, 8);
+            String avgEntry = String.format("%.2f", order.getAvgEntry());
+            String closePrice = order.getType() == FilledOrder.OrderType.CLOSE
+                ? String.format("%.2f", order.getPrice())
+                : "-";
+            String volume = String.format("%.8f", order.getQuantity());
+            String pnl = order.getRealizedPnL() != null
+                ? String.format("%.2f", order.getRealizedPnL())
+                : "-";
+
+            System.out.printf("%-20s | %-6s | %-10s | %-12s | %-12s | %-12s | %-12s%n",
+                timestamp, type, posId, avgEntry, closePrice, volume, pnl);
+        }
+
+        System.out.println("=".repeat(120));
         System.out.println();
     }
 

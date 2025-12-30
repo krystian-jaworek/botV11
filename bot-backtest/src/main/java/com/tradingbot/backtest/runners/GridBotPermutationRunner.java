@@ -4,6 +4,7 @@ import com.tradingbot.algorithms.gridbot.GridBotAlgorithm;
 import com.tradingbot.algorithms.gridbot.GridBotConfig;
 import com.tradingbot.backtest.data.CandleFileReader;
 import com.tradingbot.backtest.permutation.*;
+import com.tradingbot.backtest.reporting.ConsoleReporter;
 import com.tradingbot.core.models.Candle;
 import com.tradingbot.persistence.config.MongoConfig;
 import com.tradingbot.persistence.repositories.DynamicSimulationResultRepository;
@@ -299,6 +300,14 @@ public class GridBotPermutationRunner {
             System.out.printf("%nBest Config: %s%n", bestConfig.getConfigId());
         }
         System.out.println("=======================================");
+
+        // Display filled orders table for best result
+        if (!topTenWithConfigs.isEmpty()) {
+            System.out.println();
+            System.out.println("===== BEST RESULT FILLED ORDERS =====");
+            var bestResult = topTenWithConfigs.get(0).getSimulationResult();
+            ConsoleReporter.printFilledOrdersTable(bestResult.getFilledOrders());
+        }
 
         log.info("Permutation run completed successfully");
     }
