@@ -122,11 +122,13 @@ public class TechnicalIndicators {
 
     /**
      * Calculate Simple Moving Average of volume.
+     * DISABLED - Candles don't contain volume data.
      *
      * @param candles Historical candles (most recent last)
      * @param period SMA period (e.g., 20)
      * @return Volume SMA, or null if insufficient data
      */
+    /*
     public static BigDecimal calculateVolumeSMA(List<Candle> candles, int period) {
         if (candles.size() < period) {
             return null;
@@ -139,6 +141,7 @@ public class TechnicalIndicators {
 
         return sum.divide(new BigDecimal(period), 8, RoundingMode.HALF_UP);
     }
+    */
 
     /**
      * Find the highest close price in the lookback period.
