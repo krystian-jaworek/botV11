@@ -283,6 +283,13 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
         // Reduce pending exit quantity
         pendingExitQuantity = pendingExitQuantity.subtract(qtyToCloseFromThisPosition);
 
+        // Remove position ID if we're closing it fully
+        // This prevents double-removal in onPositionClosed()
+        if (closeFullPosition) {
+            dcaPosition.removePositionId(oldestPositionId);
+            log.debug("Removed position ID {} from DCA tracking (full close)", oldestPositionId.substring(0, 8));
+        }
+
         // Clear pending state if done
         if (pendingExitQuantity.compareTo(new BigDecimal("0.00000001")) < 0) {
             log.info("EXIT COMPLETED: {}%, reason={}", pendingExitPercentage, pendingExitReason);
@@ -392,12 +399,13 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
 
     @Override
     public void onPositionClosed(ClosedPosition closedPosition) {
-        // Remove position ID from tracking
-        dcaPosition.removePositionId(closedPosition.getId());
+        // NOTE: Position ID removal is handled in processPendingExit() when we know it's a full close.
+        // This callback is just for logging and metrics.
 
-        log.debug("Position closed: ID={}, P&L={}, remaining_positions={}",
+        log.debug("Position close callback: ID={}, P&L={}, qty={}, current_dca_positions={}",
             closedPosition.getId().substring(0, 8),
             closedPosition.getRealizedPnL(),
+            closedPosition.getQuantity(),
             dcaPosition.getPositionCount());
     }
 
