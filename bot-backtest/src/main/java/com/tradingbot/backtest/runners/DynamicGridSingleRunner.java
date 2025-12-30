@@ -72,7 +72,7 @@ public class DynamicGridSingleRunner {
 
         // Create backtest engine with event listener
         BacktestEngine engine = new BacktestEngine(tradingPair, INITIAL_CAPITAL);
-        engine.addEventListener(new ConsoleReporter(tradingPair));
+        engine.addEventListener(new ConsoleReporter());
 
         // Run simulation
         log.info("Running simulation...");
