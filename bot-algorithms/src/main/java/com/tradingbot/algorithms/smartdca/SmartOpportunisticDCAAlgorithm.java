@@ -262,12 +262,17 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
             closeFullPosition = false;
         }
 
-        // Calculate P&L and update DCAPosition proportionally
-        BigDecimal percentageOfTotal = qtyToCloseFromThisPosition
-            .divide(dcaPosition.getTotalQuantity(), 8, RoundingMode.HALF_UP)
-            .multiply(new BigDecimal("100"));
-
-        DCAPosition.CloseResult result = dcaPosition.closePercentage(percentageOfTotal, price);
+        // Close by exact quantity (more precise than percentage-based closing)
+        // This prevents floating point errors from accumulating
+        DCAPosition.CloseResult result;
+        try {
+            result = dcaPosition.closeByQuantity(qtyToCloseFromThisPosition, price);
+        } catch (IllegalArgumentException e) {
+            // Safeguard: If trying to close more than available, close everything
+            log.warn("Cannot close {} from DCA position (total={}): {}. Closing all remaining.",
+                qtyToCloseFromThisPosition, dcaPosition.getTotalQuantity(), e.getMessage());
+            result = dcaPosition.closeByQuantity(dcaPosition.getTotalQuantity(), price);
+        }
 
         log.info("EXIT EXECUTING: close_qty={}, position_id={}, full={}, P&L={}, remaining_pending={}",
             qtyToCloseFromThisPosition,
@@ -294,7 +299,9 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
 
         // Clear pending state if done
         if (pendingExitQuantity.compareTo(new BigDecimal("0.00000001")) < 0) {
-            log.info("EXIT COMPLETED: {}%, reason={}", pendingExitPercentage, pendingExitReason);
+            log.info("EXIT COMPLETED: {}%, reason={}, dca_total_qty={}, dca_position_count={}",
+                pendingExitPercentage, pendingExitReason,
+                dcaPosition.getTotalQuantity(), dcaPosition.getPositionCount());
             pendingExitQuantity = BigDecimal.ZERO;
             pendingExitPercentage = BigDecimal.ZERO;
             pendingExitReason = null;
@@ -317,14 +324,9 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
      * Update equity tracking for drawdown calculation
      */
     private void updateEquityTracking(Portfolio portfolio, BigDecimal currentPrice) {
-        BigDecimal currentEquity = portfolio.getCashBalance();
-
-        // Add unrealized position value
-        if (!dcaPosition.isEmpty()) {
-            currentEquity = currentEquity.add(
-                dcaPosition.getTotalQuantity().multiply(currentPrice)
-            );
-        }
+        // Use Portfolio's equity calculation (it already includes all open positions)
+        // DON'T mix portfolio.getCashBalance() + dcaPosition.getTotalQuantity() - they're different sources!
+        BigDecimal currentEquity = portfolio.getEquity(currentPrice);
 
         // Update peak
         if (currentEquity.compareTo(peakEquity) > 0) {

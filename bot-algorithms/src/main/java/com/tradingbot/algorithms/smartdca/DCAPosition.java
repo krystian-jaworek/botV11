@@ -143,12 +143,56 @@ public class DCAPosition {
     }
 
     /**
+     * Close an exact quantity of the position.
+     * More precise than closePercentage() - avoids floating point errors.
+     *
+     * @param quantityToClose Exact quantity to close
+     * @param closePrice Price at which to close
+     * @return CloseResult with realized profit and quantity closed
+     */
+    public CloseResult closeByQuantity(BigDecimal quantityToClose, BigDecimal closePrice) {
+        if (quantityToClose.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Quantity to close must be positive");
+        }
+
+        if (quantityToClose.compareTo(totalQuantity) > 0) {
+            throw new IllegalArgumentException(
+                String.format("Cannot close more than available: %s > %s", quantityToClose, totalQuantity));
+        }
+
+        // Calculate proportional invested amount (maintains weighted average)
+        BigDecimal percentageOfTotal = quantityToClose
+            .divide(totalQuantity, 10, RoundingMode.HALF_UP);
+        BigDecimal investedToClose = totalInvested.multiply(percentageOfTotal);
+
+        // Calculate realized P&L from average entry price
+        BigDecimal realizedPnL = quantityToClose.multiply(closePrice.subtract(avgEntryPrice));
+
+        // Update totals
+        totalQuantity = totalQuantity.subtract(quantityToClose);
+        totalInvested = totalInvested.subtract(investedToClose);
+
+        // Recalculate average entry (should remain the same for remaining quantity)
+        if (totalQuantity.compareTo(new BigDecimal("0.00000001")) > 0) {
+            avgEntryPrice = totalInvested.divide(totalQuantity, 8, RoundingMode.HALF_UP);
+        } else {
+            // Close enough to zero - clear everything
+            avgEntryPrice = BigDecimal.ZERO;
+            totalQuantity = BigDecimal.ZERO;
+            totalInvested = BigDecimal.ZERO;
+        }
+
+        return new CloseResult(realizedPnL, quantityToClose, investedToClose);
+    }
+
+    /**
      * Close a percentage of the position.
      * Returns the realized profit and quantity closed.
      *
      * @param percentageToClose Percentage of total quantity to close (e.g., 15 for 15%)
      * @param closePrice Price at which to close
      * @return CloseResult with realized profit and quantity closed
+     * @deprecated Use closeByQuantity() for better precision
      */
     public CloseResult closePercentage(BigDecimal percentageToClose, BigDecimal closePrice) {
         if (percentageToClose.compareTo(BigDecimal.ZERO) <= 0 ||
@@ -161,26 +205,8 @@ public class DCAPosition {
             .multiply(percentageToClose)
             .divide(new BigDecimal("100"), 8, RoundingMode.HALF_UP);
 
-        // Calculate invested amount to close (proportional)
-        BigDecimal investedToClose = totalInvested
-            .multiply(percentageToClose)
-            .divide(new BigDecimal("100"), 8, RoundingMode.HALF_UP);
-
-        // Calculate realized P&L from average entry price
-        BigDecimal realizedPnL = quantityToClose.multiply(closePrice.subtract(avgEntryPrice));
-
-        // Update totals
-        totalQuantity = totalQuantity.subtract(quantityToClose);
-        totalInvested = totalInvested.subtract(investedToClose);
-
-        // Recalculate average entry (should remain the same for remaining quantity)
-        if (totalQuantity.compareTo(BigDecimal.ZERO) > 0) {
-            avgEntryPrice = totalInvested.divide(totalQuantity, 8, RoundingMode.HALF_UP);
-        } else {
-            avgEntryPrice = BigDecimal.ZERO;
-        }
-
-        return new CloseResult(realizedPnL, quantityToClose, investedToClose);
+        // Delegate to closeByQuantity for actual closing
+        return closeByQuantity(quantityToClose, closePrice);
     }
 
     /**
