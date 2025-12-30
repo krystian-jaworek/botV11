@@ -293,7 +293,7 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
 
         // Return close decision
         if (closeFullPosition) {
-            return new TradingDecision.ClosePositionFull(oldestPositionId, price, pendingExitReason);
+            return new TradingDecision.ClosePosition(oldestPositionId, price);
         } else {
             return new TradingDecision.ClosePositionPartial(
                 oldestPositionId,
