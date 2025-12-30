@@ -83,12 +83,12 @@ public class DynamicGridAlgorithm implements TradingAlgorithm<DynamicGridConfig>
         // Initial capital will be set on first candle
         initializeGrid(initialPrice);
 
-        log.info("DynamicGrid initialized with {} levels, spacing={}%, tp={}%, size={}%",
+        log.debug("DynamicGrid initialized with {} levels, spacing={}%, tp={}%, size={}%",
             config.getGridLevels(),
             config.getGridSpacingPercent(),
             config.getTakeProfitPercent(),
             config.getPositionSizePercent());
-        log.info("Initial price: {}, Bottom level: {}, Top level: {}",
+        log.debug("Initial price: {}, Bottom level: {}, Top level: {}",
             initialPrice,
             getBottomLevel().getPrice(),
             getTopLevel().getPrice());
@@ -338,7 +338,7 @@ public class DynamicGridAlgorithm implements TradingAlgorithm<DynamicGridConfig>
 
     @Override
     public void restoreState(AlgorithmState state) {
-        log.info("Restoring DynamicGrid state");
+        log.debug("Restoring DynamicGrid state");
 
         // Restore grid levels
         @SuppressWarnings("unchecked")
@@ -389,7 +389,7 @@ public class DynamicGridAlgorithm implements TradingAlgorithm<DynamicGridConfig>
             }
         }
 
-        log.info("DynamicGrid state restored with {} levels, {} open positions",
+        log.debug("DynamicGrid state restored with {} levels, {} open positions",
             gridLevels.size(), openPositionsQueue.size());
     }
 
