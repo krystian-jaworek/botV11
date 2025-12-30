@@ -82,7 +82,7 @@ public class ProfitManager {
             return null;
         }
 
-        BigDecimal avgEntry = position.getAverageEntryPrice();
+        BigDecimal avgEntry = position.getAvgEntryPrice();
 
         // If price drops to or below breakeven, close entire position
         if (currentPrice.compareTo(avgEntry) <= 0) {
