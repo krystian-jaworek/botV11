@@ -5,7 +5,7 @@ Multi-module Java 21 trading bot with backtesting and production capabilities.
 ## Modules
 
 - **bot-core** - Domain models, interfaces, and utilities
-- **bot-algorithms** - Trading algorithm implementations (GridBot)
+- **bot-algorithms** - Trading algorithm implementations (GridBot, DynamicGrid)
 - **bot-backtest** - Backtesting engine with single and permutation modes
 - **bot-persistence** - MongoDB persistence layer
 - **bot-production** - Spring Boot production system with REST API
@@ -97,7 +97,85 @@ The permutation runner displays:
 **MongoDB Collections:**
 - Results stored in: `GridBot-<PAIR>` (e.g., `GridBot-BTCUSDT`)
 
-### 3. Production System (Spring Boot)
+### 3. DynamicGrid Trading (Advanced Grid Strategy)
+
+Advanced grid trading with dynamic level shifting and FIFO position management.
+
+**Single Simulation:**
+```bash
+# Default config
+java -cp bot-backtest/target/bot-backtest.jar com.tradingbot.backtest.runners.DynamicGridSingleRunner
+
+# Custom file
+java -cp bot-backtest/target/bot-backtest.jar com.tradingbot.backtest.runners.DynamicGridSingleRunner ETHUSDT-1-365.txt
+```
+
+**Permutation Mode (~1,000 simulations):**
+```bash
+# Default (BTCUSDT-1-365.txt, MongoDB enabled)
+java -cp bot-backtest/target/bot-backtest.jar com.tradingbot.backtest.runners.DynamicGridPermutationRunner
+
+# Custom file
+java -cp bot-backtest/target/bot-backtest.jar com.tradingbot.backtest.runners.DynamicGridPermutationRunner ETHUSDT
+
+# Disable MongoDB
+java -cp bot-backtest/target/bot-backtest.jar com.tradingbot.backtest.runners.DynamicGridPermutationRunner BTCUSDT false
+```
+
+**Strategy Overview:**
+
+Unlike static GridBot, DynamicGrid adapts to market conditions:
+
+1. **Bottom Breach Mechanism**: When price falls below lowest grid level:
+   - Closes oldest position (FIFO)
+   - Adds new buy level below
+   - Removes old bottom level
+   - Grid "shifts down" following price
+
+2. **Top Expansion Mechanism**: When price exceeds top level trigger:
+   - Closes oldest position (FIFO)
+   - Expands grid upward
+   - Realizes profits from old positions
+
+3. **FIFO Position Management**:
+   - Tracks all positions chronologically
+   - Always closes oldest first
+   - Prevents accumulation of underwater positions
+
+4. **Individual Take Profits**:
+   - Each position has its own TP level
+   - TP = entry_price × (1 + tp_percent)
+   - Positions close independently when TP hit
+
+**Parameter Ranges (default):**
+- Grid levels: 10, 15, 20 (3 values)
+- Grid spacing: 0.5%, 1.0%, 1.5%, 2.0% (4 values)
+- Take profit: 1.0%, 1.5%, 2.0%, 2.5%, 3.0% (5 values)
+- Position size: 5%, 10%, 15% (3 values)
+- Top trigger: 0.3%, 0.5%, 0.7% (3 values)
+- Fixed sizing: [dynamic, fixed] (2 values)
+
+**Total:** 3 × 4 × 5 × 3 × 3 × 2 = **1,080 simulations**
+
+**Features:**
+- Java 21 Virtual Threads for parallel execution
+- Progress reporting every 50 simulations
+- Batch MongoDB persistence (1000 results or 10s interval)
+- Top 10 configurations summary with **algorithm parameters**
+- Best/worst/average/median statistics
+- **MongoDB ID display** for each top result (when MongoDB enabled)
+
+**Output:**
+The permutation runner displays:
+1. **Summary statistics** - total simulations, success rate, profit stats
+2. **Top 10 configurations** - includes algorithm parameters for each result
+3. **Top 10 with MongoDB IDs** - matches current results with MongoDB IDs
+4. **Best configuration details** - complete metrics and config ID
+
+**MongoDB Collections:**
+- Results stored in: `DynamicGrid-<PAIR>` (e.g., `DynamicGrid-BTCUSDT`)
+
+### 4. Production System (Spring Boot)
 
 Start the production trading system:
 
@@ -188,6 +266,51 @@ curl http://localhost:8080/api/v1/algorithms/health
 - ...
 - Level 19: $81,705
 
+### DynamicGrid Algorithm (LONG only)
+
+**Strategy:**
+1. Create dynamic grid of buy/sell levels around initial price
+2. When price drops to buy level → OPEN position
+3. When price reaches position's TP → CLOSE with profit
+4. When price breaches bottom → SHIFT grid down (close oldest, add new level)
+5. When price exceeds top trigger → EXPAND grid up (close oldest)
+
+**Grid Initialization:**
+- Total levels: N (e.g., 10)
+- Levels below start: floor(N/2) - buy orders
+- Level at start: neutral
+- Levels above start: remaining - sell targets
+- Spacing: geometric (e.g., 1% between levels)
+
+**Bottom Breach Flow:**
+```
+Price < bottom_level:
+  1. Close oldest position (FIFO)
+  2. new_bottom = bottom × (1 - spacing%)
+  3. Add buy level at new_bottom
+  4. Remove old bottom level
+  5. Repeat if price still below
+```
+
+**Top Expansion Flow:**
+```
+Price > top × (1 + trigger%):
+  1. Close oldest position (FIFO)
+  2. new_top = top × (1 + spacing%)
+  3. Add sell level at new_top
+```
+
+**FIFO Queue:**
+- Positions tracked chronologically
+- Oldest position always closed first
+- Prevents accumulation of old positions
+- Natural profit-taking mechanism
+
+**Example** (10 levels, 1% spacing, $90,000 start):
+- Levels: $81,707 ... $89,109 | $90,000 | $90,900 ... $99,471
+- Bottom breach at $81,500 → close oldest, add $80,890
+- Top expansion at $99,970 → close oldest, add $100,471
+
 ### Simulation Interruption
 
 Simulation stops if:
@@ -222,6 +345,8 @@ mongodb://admin:password@localhost:27017/
 **Collections:**
 - `GridBot-BTCUSDT` - Simulation results for GridBot on BTCUSDT
 - `GridBot-ETHUSDT` - Simulation results for GridBot on ETHUSDT
+- `DynamicGrid-BTCUSDT` - Simulation results for DynamicGrid on BTCUSDT
+- `DynamicGrid-ETHUSDT` - Simulation results for DynamicGrid on ETHUSDT
 - `algorithm_states` - Active algorithm states (production)
 - `algorithm-events` - Event sourcing logs (DEBUG mode)
 
