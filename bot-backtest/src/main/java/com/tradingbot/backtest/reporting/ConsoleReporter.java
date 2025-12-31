@@ -183,28 +183,24 @@ public class ConsoleReporter implements SimulationEventListener {
         System.out.println();
 
         // Header
-        System.out.printf("%-20s | %-6s | %-10s | %-12s | %-12s | %-12s | %-12s%n",
-            "Date/Time", "Type", "Pos ID", "Entry Price", "Close Price", "Volume", "P&L");
+        System.out.printf("%-20s | %-6s | %-10s | %-13s | %-13s | %-12s | %-12s%n",
+            "Date/Time", "Type", "Pos ID", "Order Price", "Avg Entry", "Volume", "P&L");
         System.out.println("-".repeat(120));
-
-        // Note: For DCA algorithms, "Entry Price" shows individual position entry, not weighted average
 
         // Data rows
         for (FilledOrder order : filledOrders) {
             String timestamp = DATE_FORMATTER.format(Instant.ofEpochMilli(order.getTimestamp()));
             String type = order.getType().toString();
             String posId = order.getPositionId().substring(0, 8);
+            String orderPrice = String.format("%.2f", order.getPrice());
             String avgEntry = String.format("%.2f", order.getAvgEntry());
-            String closePrice = order.getType() == FilledOrder.OrderType.CLOSE
-                ? String.format("%.2f", order.getPrice())
-                : "-";
             String volume = String.format("%.8f", order.getQuantity());
             String pnl = order.getRealizedPnL() != null
                 ? String.format("%.2f", order.getRealizedPnL())
                 : "-";
 
-            System.out.printf("%-20s | %-6s | %-10s | %-12s | %-12s | %-12s | %-12s%n",
-                timestamp, type, posId, avgEntry, closePrice, volume, pnl);
+            System.out.printf("%-20s | %-6s | %-10s | %-13s | %-13s | %-12s | %-12s%n",
+                timestamp, type, posId, orderPrice, avgEntry, volume, pnl);
         }
 
         System.out.println("=".repeat(120));
