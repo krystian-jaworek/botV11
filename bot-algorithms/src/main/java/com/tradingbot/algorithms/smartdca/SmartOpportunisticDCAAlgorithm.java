@@ -33,6 +33,11 @@ import java.util.List;
 @Slf4j
 public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCAConfig> {
 
+    // ⚠️ ORDER VALIDATION CONSTANTS
+    private static final BigDecimal MINIMUM_ORDER_VALUE_USD = new BigDecimal("10.0");  // $10 minimum
+    private static final BigDecimal MINIMUM_CASH_RESERVE_USD = new BigDecimal("50.0"); // Always keep $50
+    private static final BigDecimal MINIMUM_QUANTITY_BTC = new BigDecimal("0.001");    // 0.001 BTC minimum
+
     private final SmartDCAConfig config;
     private final BuySignalEvaluator buyEvaluator;
     private final ProfitManager profitManager;
@@ -159,7 +164,15 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
                                        Portfolio portfolio) {
 
         // Get available cash from portfolio
-        BigDecimal availableCash = portfolio.getCashBalance();
+        BigDecimal totalCash = portfolio.getCashBalance();
+
+        // ⚠️ VALIDATION #1: Check cash reserve
+        BigDecimal availableCash = totalCash.subtract(MINIMUM_CASH_RESERVE_USD);
+        if (availableCash.compareTo(BigDecimal.ZERO) <= 0) {
+            log.warn("BUY REJECTED: Insufficient cash after reserve (total={}, reserve={}, available={})",
+                totalCash, MINIMUM_CASH_RESERVE_USD, availableCash);
+            return TradingDecision.Hold.INSTANCE;
+        }
 
         // Calculate position size
         BigDecimal sizePct = signal.getTier().getSizePct();
@@ -172,12 +185,36 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
             investAmount = availableCash;
         }
 
+        // Round price to exchange precision
+        BigDecimal roundedPrice = config.getTradingPair().roundPrice(price);
+
         // Calculate quantity
-        BigDecimal rawQuantity = investAmount.divide(price, 8, RoundingMode.HALF_UP);
+        BigDecimal rawQuantity = investAmount.divide(roundedPrice, 8, RoundingMode.HALF_UP);
 
         // Round to exchange precision
         BigDecimal quantity = config.getTradingPair().roundQuantity(rawQuantity);
-        BigDecimal roundedPrice = config.getTradingPair().roundPrice(price);
+
+        // ⚠️ VALIDATION #2: Check if quantity is too small after rounding
+        if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
+            log.warn("BUY REJECTED: Quantity too small after rounding (raw={}, rounded={}, invest={}, price={})",
+                rawQuantity, quantity, investAmount, roundedPrice);
+            return TradingDecision.Hold.INSTANCE;
+        }
+
+        // ⚠️ VALIDATION #3: Check minimum order value
+        BigDecimal orderValue = quantity.multiply(roundedPrice);
+        if (orderValue.compareTo(MINIMUM_ORDER_VALUE_USD) < 0) {
+            log.warn("BUY REJECTED: Order value too small (value={}, minimum={})",
+                orderValue, MINIMUM_ORDER_VALUE_USD);
+            return TradingDecision.Hold.INSTANCE;
+        }
+
+        // ⚠️ VALIDATION #4: Verify we have enough cash for this order
+        if (orderValue.compareTo(totalCash) > 0) {
+            log.warn("BUY REJECTED: Insufficient cash for order (need={}, have={})",
+                orderValue, totalCash);
+            return TradingDecision.Hold.INSTANCE;
+        }
 
         // Update last buy tracking
         lastBuyTimestamp = timestamp;
@@ -256,6 +293,21 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
             // Round quantity to exchange precision
             BigDecimal quantityToClose = config.getTradingPair().roundQuantity(rawQuantityToClose);
 
+            // ⚠️ VALIDATION: Check if quantity is too small after rounding
+            if (quantityToClose.compareTo(BigDecimal.ZERO) <= 0) {
+                log.warn("EXIT SKIPPED: quantity rounds to zero (raw={}, position_qty={}, close_pct={}%)",
+                    rawQuantityToClose, position.getQuantity(), percentageToClose);
+                return TradingDecision.Hold.INSTANCE;
+            }
+
+            // ⚠️ VALIDATION: Check if trying to close more than available
+            if (quantityToClose.compareTo(position.getQuantity()) > 0) {
+                log.warn("EXIT ADJUSTED: trying to close {} but only {} available, closing all",
+                    quantityToClose, position.getQuantity());
+                // Close full position instead
+                return new TradingDecision.ClosePosition(currentPositionId, roundedPrice);
+            }
+
             log.info("EXIT (PARTIAL): type={}, close_pct={}%, qty_to_close={}, reason={}, avg_entry={}, exit_price={}, profit={}%",
                 signal.getType(), percentageToClose, quantityToClose, signal.getReason(),
                 position.getEntryPrice(), roundedPrice,
@@ -312,29 +364,49 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
             .divide(peakEquity, 8, RoundingMode.HALF_UP)
             .multiply(new BigDecimal("100"));
 
+        BigDecimal maxDrawdownThreshold = config.getRiskManagement().getMaxDrawdownPct();
+
         if (!buyingPaused) {
             // Check if should pause
-            if (drawdown.compareTo(config.getRiskManagement().getMaxDrawdownPct()) >= 0) {
+            if (drawdown.compareTo(maxDrawdownThreshold) >= 0) {
                 buyingPaused = true;
                 pauseStartTimestamp = timestamp;
                 priceAtPause = currentPrice;
-                log.warn("DRAWDOWN PAUSE: drawdown {}% >= threshold {}%, pausing buying for {} days",
-                    drawdown, config.getRiskManagement().getMaxDrawdownPct(),
+                log.warn("🚨 DRAWDOWN PAUSE: drawdown {:.2f}% >= threshold {:.2f}%, peak={}, current={}, pausing for {} days",
+                    drawdown, maxDrawdownThreshold, peakEquity, currentEquity,
                     config.getRiskManagement().getDrawdownAction().getCooldownDays());
             }
         } else {
-            // Check if should resume
+            // ⚠️ Check ALL recovery conditions (must all be true)
+
+            // Condition 1: Cooldown period passed
             long daysSincePause = (timestamp - pauseStartTimestamp) / (1000L * 60 * 60 * 24);
+            boolean cooldownPassed = daysSincePause >= config.getRiskManagement().getDrawdownAction().getCooldownDays();
 
-            if (daysSincePause >= config.getRiskManagement().getDrawdownAction().getCooldownDays()) {
-                // Check price recovery condition
-                BigDecimal priceRecovery = currentPrice.subtract(priceAtPause)
-                    .divide(priceAtPause, 8, RoundingMode.HALF_UP)
-                    .multiply(new BigDecimal("100"));
+            // Condition 2: Price recovered by at least 5%
+            BigDecimal priceRecovery = currentPrice.subtract(priceAtPause)
+                .divide(priceAtPause, 8, RoundingMode.HALF_UP)
+                .multiply(new BigDecimal("100"));
+            boolean priceRecovered = priceRecovery.compareTo(new BigDecimal("5")) >= 0;
 
-                if (priceRecovery.compareTo(new BigDecimal("5")) >= 0) {
-                    buyingPaused = false;
-                    log.info("DRAWDOWN RESUME: price recovered +{}%, resuming buying", priceRecovery);
+            // Condition 3: Drawdown improved (current drawdown < threshold - 5%)
+            BigDecimal drawdownImprovement = maxDrawdownThreshold.subtract(new BigDecimal("5"));
+            boolean drawdownImproved = drawdown.compareTo(drawdownImprovement) < 0;
+
+            // Resume only if ALL conditions met
+            if (cooldownPassed && priceRecovered && drawdownImproved) {
+                buyingPaused = false;
+                log.info("✅ DRAWDOWN RESUME: cooldown={} days, price recovery={:.2f}%, drawdown={:.2f}% < {:.2f}%",
+                    daysSincePause, priceRecovery, drawdown, drawdownImprovement);
+            } else {
+                // Log why we're still paused
+                if (!cooldownPassed) {
+                    log.debug("Still paused: cooldown {}/{} days", daysSincePause,
+                        config.getRiskManagement().getDrawdownAction().getCooldownDays());
+                } else if (!priceRecovered) {
+                    log.debug("Still paused: price recovery {:.2f}% < 5%", priceRecovery);
+                } else if (!drawdownImproved) {
+                    log.debug("Still paused: drawdown {:.2f}% >= {:.2f}%", drawdown, drawdownImprovement);
                 }
             }
         }

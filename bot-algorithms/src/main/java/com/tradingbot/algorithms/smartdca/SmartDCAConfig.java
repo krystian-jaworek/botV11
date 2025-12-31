@@ -228,26 +228,26 @@ public class SmartDCAConfig implements AlgorithmConfig {
         return BuyConditions.builder()
             .rsi(BuyConditions.RsiCondition.builder()
                 .period(14)
-                .oversoldThreshold(45)  // Increased for 1-minute candles
-                .extremeOversold(35)
+                .oversoldThreshold(35)  // More strict - reduced from 45
+                .extremeOversold(25)    // More strict - reduced from 35
                 .build())
             .priceDrop(BuyConditions.PriceDropCondition.builder()
-                .minFromLastBuyPct(new BigDecimal("2"))  // Reduced for 1-min candles
-                .minFromLocalHighPct(new BigDecimal("3"))  // Reduced for 1-min candles
+                .minFromLastBuyPct(new BigDecimal("4"))  // More strict - increased from 2%
+                .minFromLocalHighPct(new BigDecimal("8"))  // More strict - increased from 3%
                 .localHighLookbackPeriods(480)  // 8 hours for 1-min candles
                 .build())
             .volume(BuyConditions.VolumeCondition.builder()
                 .requireConfirmation(true)
-                .spikeMultiplier(new BigDecimal("1.4"))
+                .spikeMultiplier(new BigDecimal("1.8"))  // More strict - increased from 1.4
                 .maPeriods(20)
                 .build())
             .emaSupport(BuyConditions.EmaSupportCondition.builder()
                 .enabled(true)
                 .period(200)  // ~3.3 hours for 1-min candles
-                .maxProximityPct(new BigDecimal("15"))  // More lenient
+                .maxProximityPct(new BigDecimal("15"))
                 .build())
             .cooldown(BuyConditions.CooldownCondition.builder()
-                .minHoursBetweenBuys(4)  // 4 hours = 240 minutes for 1-min candles
+                .minHoursBetweenBuys(24)  // Much longer - increased from 4h to 24h
                 .build())
             .build();
     }
@@ -259,26 +259,26 @@ public class SmartDCAConfig implements AlgorithmConfig {
                 PositionSizing.PositionTier.builder()
                     .name("Tier 1 - Small Dip")
                     .conditions(PositionSizing.PositionTier.TierConditions.builder()
-                        .rsiRange(List.of(40, 45))  // Adjusted for 1-min candles
-                        .priceDropRange(List.of(new BigDecimal("1"), new BigDecimal("3")))  // 1-3% drop
+                        .rsiRange(List.of(30, 35))  // Stricter - reduced from [40,45]
+                        .priceDropRange(List.of(new BigDecimal("5"), new BigDecimal("10")))  // Larger drops - from [1,3]
                         .build())
-                    .sizePct(new BigDecimal("4"))
+                    .sizePct(new BigDecimal("3"))  // Smaller size - reduced from 4%
                     .build(),
                 PositionSizing.PositionTier.builder()
                     .name("Tier 2 - Medium Dip")
                     .conditions(PositionSizing.PositionTier.TierConditions.builder()
-                        .rsiRange(List.of(35, 40))  // Adjusted for 1-min candles
-                        .priceDropRange(List.of(new BigDecimal("3"), new BigDecimal("6")))  // 3-6% drop
+                        .rsiRange(List.of(25, 30))  // Stricter - reduced from [35,40]
+                        .priceDropRange(List.of(new BigDecimal("10"), new BigDecimal("18")))  // Larger drops - from [3,6]
                         .build())
-                    .sizePct(new BigDecimal("7"))
+                    .sizePct(new BigDecimal("6"))  // Smaller size - reduced from 7%
                     .build(),
                 PositionSizing.PositionTier.builder()
                     .name("Tier 3 - Deep Dip (Bargain)")
                     .conditions(PositionSizing.PositionTier.TierConditions.builder()
-                        .rsiRange(List.of(0, 35))  // Adjusted for 1-min candles
-                        .priceDropRange(List.of(new BigDecimal("6"), new BigDecimal("999")))  // >6% drop
+                        .rsiRange(List.of(0, 25))  // Stricter - reduced from [0,35]
+                        .priceDropRange(List.of(new BigDecimal("18"), new BigDecimal("999")))  // Larger drops - from [6,999]
                         .build())
-                    .sizePct(new BigDecimal("12"))
+                    .sizePct(new BigDecimal("10"))  // Smaller size - reduced from 12%
                     .build()
             ))
             .build();
@@ -309,34 +309,34 @@ public class SmartDCAConfig implements AlgorithmConfig {
             .technicalExits(ProfitManagement.TechnicalExits.builder()
                 .enabled(true)
                 .normal(ProfitManagement.TechnicalExits.TechnicalExitRule.builder()
-                    .rsiThreshold(72)
+                    .rsiThreshold(80)  // Much stricter - increased from 72
                     .requireAboveEma200(true)
-                    .minProfitPct(new BigDecimal("18"))
+                    .minProfitPct(new BigDecimal("50"))  // Much higher - increased from 18%
                     .closePct(new BigDecimal("20"))
                     .build())
                 .extreme(ProfitManagement.TechnicalExits.TechnicalExitRule.builder()
-                    .rsiThreshold(82)
+                    .rsiThreshold(90)  // Much stricter - increased from 82
                     .requireAboveEma200(null)
-                    .minProfitPct(new BigDecimal("12"))
+                    .minProfitPct(new BigDecimal("30"))  // Much higher - increased from 12%
                     .closePct(new BigDecimal("35"))
                     .build())
                 .build())
             .trailingStop(ProfitManagement.TrailingStop.builder()
                 .enabled(true)
-                .activationProfitPct(new BigDecimal("25"))
+                .activationProfitPct(new BigDecimal("80"))  // Much higher - increased from 25%
                 .appliesTo("remaining_position")
                 .dynamicTiers(List.of(
                     ProfitManagement.TrailingStop.TrailingTier.builder()
-                        .profitRange(List.of(new BigDecimal("25"), new BigDecimal("45")))
-                        .distancePct(new BigDecimal("18"))
+                        .profitRange(List.of(new BigDecimal("80"), new BigDecimal("120")))  // Higher range
+                        .distancePct(new BigDecimal("30"))  // Wider - increased from 18%
                         .build(),
                     ProfitManagement.TrailingStop.TrailingTier.builder()
-                        .profitRange(List.of(new BigDecimal("45"), new BigDecimal("75")))
-                        .distancePct(new BigDecimal("14"))
+                        .profitRange(List.of(new BigDecimal("120"), new BigDecimal("200")))
+                        .distancePct(new BigDecimal("25"))
                         .build(),
                     ProfitManagement.TrailingStop.TrailingTier.builder()
-                        .profitRange(List.of(new BigDecimal("75"), new BigDecimal("999")))
-                        .distancePct(new BigDecimal("10"))
+                        .profitRange(List.of(new BigDecimal("200"), new BigDecimal("999")))
+                        .distancePct(new BigDecimal("20"))
                         .build()
                 ))
                 .build())
