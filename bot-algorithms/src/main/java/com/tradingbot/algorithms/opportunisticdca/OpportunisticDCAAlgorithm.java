@@ -82,13 +82,13 @@ public class OpportunisticDCAAlgorithm implements TradingAlgorithm<Opportunistic
         BigDecimal currentPrice = candle.close();
         long currentTimestamp = candle.timestamp();
 
-        // Need at least 14 candles for RSI calculation
-        if (candleHistory.size() < 14) {
+        // Need enough candles for RSI calculation
+        if (candleHistory.size() < config.getRsiPeriod()) {
             return TradingDecision.Hold.INSTANCE;
         }
 
         // Calculate RSI
-        BigDecimal rsi = calculateRSI(14);
+        BigDecimal rsi = calculateRSI(config.getRsiPeriod());
         if (rsi == null) {
             return TradingDecision.Hold.INSTANCE;
         }

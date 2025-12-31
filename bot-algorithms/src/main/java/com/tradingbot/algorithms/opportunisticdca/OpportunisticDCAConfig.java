@@ -26,6 +26,9 @@ public class OpportunisticDCAConfig implements AlgorithmConfig {
     TradingPair tradingPair;
     BigDecimal startingCapital;
 
+    // RSI period (number of candles)
+    int rsiPeriod;
+
     // Buy conditions (RSI-based tiers)
     List<BuyTier> buyTiers;
 
@@ -58,7 +61,8 @@ public class OpportunisticDCAConfig implements AlgorithmConfig {
     @Override
     public String getConfigId() {
         return String.format(
-            "OpportunisticDCA[tiers=%d,levels=%d,cooldown=%dh]",
+            "OpportunisticDCA[RSI=%d,tiers=%d,levels=%d,cooldown=%dh]",
+            rsiPeriod,
             buyTiers.size(),
             sellLevels.size(),
             cooldownHours
@@ -69,6 +73,9 @@ public class OpportunisticDCAConfig implements AlgorithmConfig {
      * Validate configuration
      */
     public void validate() {
+        if (rsiPeriod < 2) {
+            throw new IllegalArgumentException("RSI period must be >= 2");
+        }
         if (buyTiers == null || buyTiers.isEmpty()) {
             throw new IllegalArgumentException("Buy tiers cannot be empty");
         }
@@ -90,6 +97,7 @@ public class OpportunisticDCAConfig implements AlgorithmConfig {
             .timeframe("1m")
             .tradingPair(TradingPair.BTCUSDT)
             .startingCapital(new BigDecimal("10000"))
+            .rsiPeriod(1440)
             .cooldownHours(24)
             .buyTiers(List.of(
                 BuyTier.builder()

@@ -11,6 +11,7 @@ import java.util.List;
  * Parameter permutation generator for Opportunistic DCA algorithm.
  *
  * Permutes:
+ * - RSI period
  * - RSI thresholds for buy tiers
  * - Position sizes for buy tiers
  * - Profit thresholds for sell levels
@@ -18,6 +19,9 @@ import java.util.List;
  * - Cooldown hours
  */
 public class OpportunisticDCAParameterPermutation {
+
+    // RSI period values to test
+    private final List<Integer> rsiPeriodValues;
 
     // Buy tier 1: RSI thresholds to test
     private final List<Integer> tier1RsiValues;
@@ -51,6 +55,7 @@ public class OpportunisticDCAParameterPermutation {
     private final List<Integer> cooldownHoursValues;
 
     public OpportunisticDCAParameterPermutation(
+        List<Integer> rsiPeriodValues,
         List<Integer> tier1RsiValues,
         List<BigDecimal> tier1SizeValues,
         List<Integer> tier2RsiValues,
@@ -64,6 +69,7 @@ public class OpportunisticDCAParameterPermutation {
         List<BigDecimal> sell3ProfitValues,
         List<Integer> cooldownHoursValues
     ) {
+        this.rsiPeriodValues = rsiPeriodValues;
         this.tier1RsiValues = tier1RsiValues;
         this.tier1SizeValues = tier1SizeValues;
         this.tier2RsiValues = tier2RsiValues;
@@ -83,6 +89,7 @@ public class OpportunisticDCAParameterPermutation {
      */
     public static OpportunisticDCAParameterPermutation defaultPermutation() {
         return new OpportunisticDCAParameterPermutation(
+            List.of(720, 1440, 2880),                      // RSI period (12h, 24h, 48h in 1m candles)
             List.of(35, 40, 45),                           // Tier 1 RSI
             List.of(new BigDecimal("2"), new BigDecimal("3"), new BigDecimal("4")),  // Tier 1 size
             List.of(25, 30, 35),                           // Tier 2 RSI
@@ -103,6 +110,7 @@ public class OpportunisticDCAParameterPermutation {
      */
     public static OpportunisticDCAParameterPermutation compactPermutation() {
         return new OpportunisticDCAParameterPermutation(
+            List.of(1440),                    // RSI period (24h in 1m candles)
             List.of(40),                      // Tier 1 RSI
             List.of(new BigDecimal("3")),     // Tier 1 size
             List.of(30),                      // Tier 2 RSI
@@ -124,28 +132,31 @@ public class OpportunisticDCAParameterPermutation {
     public List<OpportunisticDCAConfig> generateConfigurations() {
         List<OpportunisticDCAConfig> configs = new ArrayList<>();
 
-        for (Integer tier1Rsi : tier1RsiValues) {
-            for (BigDecimal tier1Size : tier1SizeValues) {
-                for (Integer tier2Rsi : tier2RsiValues) {
-                    for (BigDecimal tier2Size : tier2SizeValues) {
-                        for (Integer tier3Rsi : tier3RsiValues) {
-                            for (BigDecimal tier3Size : tier3SizeValues) {
-                                for (BigDecimal sell1Profit : sell1ProfitValues) {
-                                    for (BigDecimal sell1Close : sell1CloseValues) {
-                                        for (BigDecimal sell2Profit : sell2ProfitValues) {
-                                            for (BigDecimal sell2Close : sell2CloseValues) {
-                                                for (BigDecimal sell3Profit : sell3ProfitValues) {
-                                                    for (Integer cooldown : cooldownHoursValues) {
-                                                        OpportunisticDCAConfig config = createConfig(
-                                                            tier1Rsi, tier1Size,
-                                                            tier2Rsi, tier2Size,
-                                                            tier3Rsi, tier3Size,
-                                                            sell1Profit, sell1Close,
-                                                            sell2Profit, sell2Close,
-                                                            sell3Profit,
-                                                            cooldown
-                                                        );
-                                                        configs.add(config);
+        for (Integer rsiPeriod : rsiPeriodValues) {
+            for (Integer tier1Rsi : tier1RsiValues) {
+                for (BigDecimal tier1Size : tier1SizeValues) {
+                    for (Integer tier2Rsi : tier2RsiValues) {
+                        for (BigDecimal tier2Size : tier2SizeValues) {
+                            for (Integer tier3Rsi : tier3RsiValues) {
+                                for (BigDecimal tier3Size : tier3SizeValues) {
+                                    for (BigDecimal sell1Profit : sell1ProfitValues) {
+                                        for (BigDecimal sell1Close : sell1CloseValues) {
+                                            for (BigDecimal sell2Profit : sell2ProfitValues) {
+                                                for (BigDecimal sell2Close : sell2CloseValues) {
+                                                    for (BigDecimal sell3Profit : sell3ProfitValues) {
+                                                        for (Integer cooldown : cooldownHoursValues) {
+                                                            OpportunisticDCAConfig config = createConfig(
+                                                                rsiPeriod,
+                                                                tier1Rsi, tier1Size,
+                                                                tier2Rsi, tier2Size,
+                                                                tier3Rsi, tier3Size,
+                                                                sell1Profit, sell1Close,
+                                                                sell2Profit, sell2Close,
+                                                                sell3Profit,
+                                                                cooldown
+                                                            );
+                                                            configs.add(config);
+                                                        }
                                                     }
                                                 }
                                             }
@@ -166,6 +177,7 @@ public class OpportunisticDCAParameterPermutation {
      * Create a config with specific parameters
      */
     private OpportunisticDCAConfig createConfig(
+        int rsiPeriod,
         int tier1Rsi, BigDecimal tier1Size,
         int tier2Rsi, BigDecimal tier2Size,
         int tier3Rsi, BigDecimal tier3Size,
@@ -180,6 +192,7 @@ public class OpportunisticDCAParameterPermutation {
             .timeframe("1m")
             .tradingPair(TradingPair.BTCUSDT)
             .startingCapital(new BigDecimal("10000"))
+            .rsiPeriod(rsiPeriod)
             .cooldownHours(cooldownHours)
             .buyTiers(List.of(
                 OpportunisticDCAConfig.BuyTier.builder()
