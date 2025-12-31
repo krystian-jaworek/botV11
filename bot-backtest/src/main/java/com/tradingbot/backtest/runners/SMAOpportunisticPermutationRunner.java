@@ -179,7 +179,7 @@ public class SMAOpportunisticPermutationRunner {
 
         // Aggregate and display results
         log.info("Aggregating results...");
-        PermutationAggregator aggregator = new PermutationAggregator(results);
+        ResultsAggregator aggregator = new ResultsAggregator(results);
 
         // Print top 10 configurations
         log.info("\n" + "=".repeat(120));

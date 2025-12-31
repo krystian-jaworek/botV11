@@ -75,13 +75,10 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
 
     @Override
     public AlgorithmState getState() {
-        // TODO: Implement state persistence if needed
-        return new AlgorithmState() {
-            @Override
-            public String serialize() {
-                return "{}";
-            }
-        };
+        // Return empty state for now
+        return AlgorithmState.builder()
+            .algorithmName(getName())
+            .build();
     }
 
     @Override
