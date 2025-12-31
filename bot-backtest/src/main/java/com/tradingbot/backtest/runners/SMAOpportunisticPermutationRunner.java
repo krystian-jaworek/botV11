@@ -109,8 +109,12 @@ public class SMAOpportunisticPermutationRunner {
         List<SMAOpportunisticConfig> configurations = permutation.generateConfigurations();
 
         log.info("Generated {} configurations", configurations.size());
-        log.info("Parameter range:");
-        log.info("  SMA period: 600-2040 (step 60)");
+        log.info("Parameter ranges:");
+        log.info("  SMA period: 600-2040 (step 240)");
+        log.info("  Position size (Y): 3%, 5%, 7%");
+        log.info("  SMA deviation (X): 1.5%, 2%, 2.5%");
+        log.info("  Take profit (Z): 2%, 3%, 4%");
+        log.info("  Cooldown (B): 12h, 24h, 48h");
 
         // Create simulation tasks
         List<SimulationTask> tasks = new ArrayList<>();
