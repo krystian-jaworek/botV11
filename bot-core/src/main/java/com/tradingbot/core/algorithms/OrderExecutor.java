@@ -59,4 +59,17 @@ public interface OrderExecutor {
     ) {
         throw new UnsupportedOperationException("Partial position closing not supported by this executor");
     }
+
+    /**
+     * Increase an existing position (futures-style DCA).
+     * Recalculates weighted average entry price.
+     *
+     * @param positionId ID of position to increase
+     * @param additionalQuantity Quantity to add to position
+     * @param price Execution price for the additional quantity
+     * @return Updated position with new quantity and weighted average entry
+     */
+    default Position increasePosition(String positionId, BigDecimal additionalQuantity, BigDecimal price) {
+        throw new UnsupportedOperationException("Position increase not supported by this executor");
+    }
 }
