@@ -9,7 +9,11 @@ import java.math.BigDecimal;
 /**
  * Configuration for SMA Opportunistic algorithm.
  *
- * Simple Moving Average based opportunistic trading strategy.
+ * SMA-based DCA strategy with cooldown period:
+ * - Buy when price < SMA - X%
+ * - Position size: Y% of portfolio
+ * - Take profit: entry price + Z%
+ * - Cooldown: B hours between buys
  */
 @Value
 @Builder
@@ -21,9 +25,39 @@ public class SMAOpportunisticConfig implements AlgorithmConfig {
      */
     int smaPeriod;
 
+    /**
+     * Y: Position size as % of portfolio
+     * Example: 5.0 = 5% of portfolio per trade
+     */
+    BigDecimal positionSizePercent;
+
+    /**
+     * X: SMA deviation % threshold for entry
+     * Example: 2.0 = buy when price < SMA - 2%
+     */
+    BigDecimal smaDeviationPercent;
+
+    /**
+     * Z: Take profit %
+     * Example: 3.0 = close position at entry + 3%
+     */
+    BigDecimal takeProfitPercent;
+
+    /**
+     * B: Cooldown period in hours
+     * Example: 24 = 24 hours between buys
+     */
+    int cooldownHours;
+
     @Override
     public String getConfigId() {
-        return String.format("SMAOpportunistic[SMA=%d]", smaPeriod);
+        return String.format("SMAOpp[SMA=%d,Size=%.1f%%,Dev=%.1f%%,TP=%.1f%%,Cool=%dh]",
+            smaPeriod,
+            positionSizePercent,
+            smaDeviationPercent,
+            takeProfitPercent,
+            cooldownHours
+        );
     }
 
     /**
@@ -33,15 +67,37 @@ public class SMAOpportunisticConfig implements AlgorithmConfig {
         if (smaPeriod < 2) {
             throw new IllegalArgumentException("SMA period must be >= 2");
         }
+        if (positionSizePercent.compareTo(BigDecimal.ZERO) <= 0 || positionSizePercent.compareTo(new BigDecimal("100")) > 0) {
+            throw new IllegalArgumentException("Position size must be between 0 and 100%");
+        }
+        if (smaDeviationPercent.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("SMA deviation must be > 0");
+        }
+        if (takeProfitPercent.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Take profit must be > 0");
+        }
+        if (cooldownHours < 0) {
+            throw new IllegalArgumentException("Cooldown hours must be >= 0");
+        }
     }
 
     /**
      * Create default configuration for single run
+     *
+     * Parameters:
      * - SMA period: 1440 (24h with 1m candles)
+     * - Y: Position size: 5% of portfolio
+     * - X: SMA deviation: 2% (buy when price < SMA - 2%)
+     * - Z: Take profit: 3%
+     * - B: Cooldown: 24 hours
      */
     public static SMAOpportunisticConfig defaultConfig() {
         return SMAOpportunisticConfig.builder()
             .smaPeriod(1440)
+            .positionSizePercent(new BigDecimal("5.0"))
+            .smaDeviationPercent(new BigDecimal("2.0"))
+            .takeProfitPercent(new BigDecimal("3.0"))
+            .cooldownHours(24)
             .build();
     }
 }
