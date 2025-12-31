@@ -16,7 +16,7 @@ import java.nio.file.Paths;
 import java.util.List;
 
 /**
- * Main runner for single simulation with hardcoded parameters.
+ * GridBot single run simulation.
  *
  * Usage: java -jar bot-backtest.jar [trading-pair|candle-file]
  *
@@ -28,7 +28,7 @@ import java.util.List;
  *
  * The candle file should be placed in src/main/resources/
  *
- * Hardcoded parameters (from requirements):
+ * Default GridBot parameters:
  * - 20 grid levels
  * - 1% distance between levels
  * - 2% take profit
@@ -36,7 +36,7 @@ import java.util.List;
  * - $10,000 initial capital
  */
 @Slf4j
-public class SingleSimulationRunner {
+public class GridBotSingleRunner {
 
     private static final BigDecimal INITIAL_CAPITAL = new BigDecimal("10000");
     private static final String DEFAULT_CANDLE_FILE = "BTCUSDT-1-365.txt";
