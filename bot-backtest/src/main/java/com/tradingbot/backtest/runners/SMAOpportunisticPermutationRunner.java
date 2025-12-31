@@ -206,11 +206,11 @@ public class SMAOpportunisticPermutationRunner {
                 i + 1,
                 result.getProfitPercentage(),
                 result.getMaxPortfolioDrawdownPercentage(),
-                result.getTotalTrades()
+                result.getTotalTradesExecuted()
             );
             System.out.printf("   Config: %s%n", config.getConfigId());
             System.out.printf("   Final Balance: $%.2f | Profit: $%.2f%n",
-                result.getFinalBalance(),
+                result.getFinalEquity(),
                 result.getProfitAbsolute()
             );
             System.out.println();
