@@ -213,6 +213,7 @@ public class SmartDCAConfig implements AlgorithmConfig {
             .algorithmName("Smart Opportunistic DCA")
             .asset("BTCUSDT")
             .timeframe("1m")  // 1-minute candles
+            .tradingPair(TradingPair.BTCUSDT)
             .startingCapital(new BigDecimal("10000"))
             .maxPortfolioAllocationPct(new BigDecimal("100"))
             .buyConditions(createDefaultBuyConditions())
