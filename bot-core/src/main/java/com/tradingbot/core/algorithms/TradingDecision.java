@@ -25,6 +25,21 @@ public sealed interface TradingDecision {
     }
 
     /**
+     * Decision to increase existing position size (futures-style DCA).
+     * Adds to position and recalculates weighted average entry.
+     */
+    record IncreasePosition(
+        String positionId,
+        BigDecimal additionalQuantity,
+        BigDecimal price,
+        String metadata  // Optional metadata
+    ) implements TradingDecision {
+        public IncreasePosition(String positionId, BigDecimal additionalQuantity, BigDecimal price) {
+            this(positionId, additionalQuantity, price, null);
+        }
+    }
+
+    /**
      * Decision to close an existing position (fully)
      */
     record ClosePosition(

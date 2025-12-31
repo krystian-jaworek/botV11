@@ -200,6 +200,29 @@ public class BacktestEngine {
                 algorithm.onPositionOpened(position);
                 notifyPositionOpened(position, currentCandle, portfolio);
             }
+            case TradingDecision.IncreasePosition increase -> {
+                Position updatedPosition = executor.increasePosition(
+                    increase.positionId(),
+                    increase.additionalQuantity(),
+                    increase.price()
+                );
+
+                // Record filled order (INCREASE - shown as OPEN in table)
+                FilledOrder filledOrder = FilledOrder.builder()
+                    .timestamp(currentCandle.timestamp())
+                    .type(FilledOrder.OrderType.OPEN)  // Display as OPEN (it's a buy)
+                    .positionId(updatedPosition.getId())
+                    .price(increase.price())
+                    .avgEntry(updatedPosition.getEntryPrice())  // New weighted average
+                    .quantity(increase.additionalQuantity())  // Just the additional amount
+                    .realizedPnL(null)
+                    .build();
+                filledOrders.add(filledOrder);
+
+                // Notify about position update (reuse onPositionOpened for now)
+                algorithm.onPositionOpened(updatedPosition);
+                notifyPositionOpened(updatedPosition, currentCandle, portfolio);
+            }
             case TradingDecision.ClosePosition close -> {
                 Position position = portfolio.getOpenPositions().get(close.positionId());
                 if (position != null) {

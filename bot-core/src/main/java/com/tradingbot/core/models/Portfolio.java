@@ -3,6 +3,7 @@ package com.tradingbot.core.models;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -59,6 +60,56 @@ public class Portfolio {
         openPositions.put(position.getId(), position);
         cashBalance = cashBalance.subtract(cost);
         updateMinCashBalance();
+    }
+
+    /**
+     * Increase position size (futures-style DCA).
+     * Calculates new weighted average entry price.
+     *
+     * @param positionId Position to increase
+     * @param additionalQuantity Additional quantity to add
+     * @param purchasePrice Price of the additional purchase
+     * @return Updated position with new quantity and weighted avg entry
+     */
+    public Position increasePosition(String positionId, BigDecimal additionalQuantity, BigDecimal purchasePrice) {
+        Position oldPosition = openPositions.get(positionId);
+        if (oldPosition == null) {
+            throw new IllegalArgumentException("Position not found: " + positionId);
+        }
+
+        BigDecimal additionalCost = additionalQuantity.multiply(purchasePrice);
+
+        if (cashBalance.compareTo(additionalCost) < 0) {
+            throw new IllegalStateException(
+                String.format("Insufficient cash balance. Required: %.2f, Available: %.2f",
+                    additionalCost, cashBalance)
+            );
+        }
+
+        // Calculate weighted average entry price
+        BigDecimal oldCost = oldPosition.getQuantity().multiply(oldPosition.getEntryPrice());
+        BigDecimal totalCost = oldCost.add(additionalCost);
+        BigDecimal newQuantity = oldPosition.getQuantity().add(additionalQuantity);
+        BigDecimal newAvgEntry = totalCost.divide(newQuantity, 8, RoundingMode.HALF_UP);
+
+        // Create updated position (Position is immutable, so create new instance)
+        Position updatedPosition = Position.builder()
+            .id(oldPosition.getId())  // Keep same ID!
+            .side(oldPosition.getSide())
+            .entryPrice(newAvgEntry)  // Updated weighted average
+            .quantity(newQuantity)    // Increased quantity
+            .openTimestamp(oldPosition.getOpenTimestamp())  // Original open time
+            .metadata(oldPosition.getMetadata())
+            .build();
+
+        // Replace old position with updated one
+        openPositions.put(positionId, updatedPosition);
+
+        // Deduct cost
+        cashBalance = cashBalance.subtract(additionalCost);
+        updateMinCashBalance();
+
+        return updatedPosition;
     }
 
     /**

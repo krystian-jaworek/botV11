@@ -36,6 +36,25 @@ public class MockOrderExecutor implements OrderExecutor {
         return position;
     }
 
+    /**
+     * Increase existing position (futures-style DCA).
+     * Adds to position quantity and recalculates weighted average entry.
+     */
+    public Position increasePosition(String positionId, BigDecimal additionalQuantity, BigDecimal price) {
+        // Increase position in portfolio (this will deduct cash and update position)
+        Position updatedPosition = portfolio.increasePosition(positionId, additionalQuantity, price);
+
+        log.debug("Increased position: {} +{} @ {} -> total={}, new avgEntry={}",
+            positionId.substring(0, 8),
+            additionalQuantity,
+            price,
+            updatedPosition.getQuantity(),
+            updatedPosition.getEntryPrice()
+        );
+
+        return updatedPosition;
+    }
+
     @Override
     public ClosedPosition closePosition(Position position, BigDecimal closePrice, long timestamp) {
 

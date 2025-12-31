@@ -1,10 +1,12 @@
 package com.tradingbot.algorithms.smartdca;
 
 import com.tradingbot.core.models.Candle;
+import com.tradingbot.core.models.Position;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,43 +26,44 @@ public class ProfitManager {
     /**
      * Evaluate exit signals for the current position.
      *
-     * @param position Current DCA position
+     * @param position Current position from Portfolio (null if no position)
+     * @param exitState Exit strategy state tracking
      * @param candles Historical candles for indicator calculation
      * @param currentCandle Current candle
      * @param ema200 Current EMA200 value (can be null)
      * @return List of exit signals (can be multiple for different reasons)
      */
-    public List<ExitSignal> evaluateExits(DCAPosition position, List<Candle> candles,
-                                          Candle currentCandle, BigDecimal ema200) {
+    public List<ExitSignal> evaluateExits(Position position, PositionExitState exitState,
+                                          List<Candle> candles, Candle currentCandle, BigDecimal ema200) {
 
         List<ExitSignal> exits = new ArrayList<>();
 
-        if (position.isEmpty()) {
+        if (position == null) {
             return exits;
         }
 
         BigDecimal currentPrice = currentCandle.close();
-        BigDecimal profitPct = position.getCurrentProfitPct(currentPrice);
+        BigDecimal profitPct = calculateProfitPct(position.getEntryPrice(), currentPrice);
 
         // Update peak price for trailing stop
-        position.updatePeakPrice(currentPrice);
+        exitState.updatePeakPrice(currentPrice);
 
         // 1. Check breakeven stop
-        ExitSignal breakevenExit = checkBreakevenStop(position, currentPrice, profitPct);
+        ExitSignal breakevenExit = checkBreakevenStop(position, exitState, currentPrice, profitPct);
         if (breakevenExit != null) {
             exits.add(breakevenExit);
             return exits;  // Breakeven stop closes entire position
         }
 
         // 2. Check trailing stop
-        ExitSignal trailingExit = checkTrailingStop(position, currentPrice, profitPct);
+        ExitSignal trailingExit = checkTrailingStop(position, exitState, currentPrice, profitPct);
         if (trailingExit != null) {
             exits.add(trailingExit);
             return exits;  // Trailing stop closes entire remaining position
         }
 
         // 3. Check staged exits
-        List<ExitSignal> stagedExits = checkStagedExits(position, currentPrice, profitPct);
+        List<ExitSignal> stagedExits = checkStagedExits(position, exitState, currentPrice, profitPct);
         exits.addAll(stagedExits);
 
         // 4. Check technical exits
@@ -75,14 +78,27 @@ public class ProfitManager {
     }
 
     /**
+     * Calculate profit percentage from entry price
+     */
+    private BigDecimal calculateProfitPct(BigDecimal entryPrice, BigDecimal currentPrice) {
+        if (entryPrice.compareTo(BigDecimal.ZERO) == 0) {
+            return BigDecimal.ZERO;
+        }
+        return currentPrice.subtract(entryPrice)
+            .divide(entryPrice, 8, RoundingMode.HALF_UP)
+            .multiply(new BigDecimal("100"));
+    }
+
+    /**
      * Check if breakeven stop should trigger
      */
-    private ExitSignal checkBreakevenStop(DCAPosition position, BigDecimal currentPrice, BigDecimal profitPct) {
-        if (!position.isBreakevenStopActive()) {
+    private ExitSignal checkBreakevenStop(Position position, PositionExitState exitState,
+                                          BigDecimal currentPrice, BigDecimal profitPct) {
+        if (!exitState.isBreakevenStopActive()) {
             return null;
         }
 
-        BigDecimal avgEntry = position.getAvgEntryPrice();
+        BigDecimal avgEntry = position.getEntryPrice();
 
         // If price drops to or below breakeven, close entire position
         if (currentPrice.compareTo(avgEntry) <= 0) {
@@ -100,8 +116,9 @@ public class ProfitManager {
     /**
      * Check if trailing stop should trigger
      */
-    private ExitSignal checkTrailingStop(DCAPosition position, BigDecimal currentPrice, BigDecimal profitPct) {
-        if (!position.isTrailingStopActive()) {
+    private ExitSignal checkTrailingStop(Position position, PositionExitState exitState,
+                                         BigDecimal currentPrice, BigDecimal profitPct) {
+        if (!exitState.isTrailingStopActive()) {
             return null;
         }
 
@@ -112,13 +129,13 @@ public class ProfitManager {
         }
 
         // Calculate trigger price (peak - trailing distance)
-        BigDecimal triggerPrice = position.getPeakPrice()
-            .multiply(BigDecimal.ONE.subtract(trailingDistance.divide(new BigDecimal("100"), 8, java.math.RoundingMode.HALF_UP)));
+        BigDecimal triggerPrice = exitState.getPeakPrice()
+            .multiply(BigDecimal.ONE.subtract(trailingDistance.divide(new BigDecimal("100"), 8, RoundingMode.HALF_UP)));
 
         // Check if current price has dropped below trigger
         if (currentPrice.compareTo(triggerPrice) <= 0) {
             log.info("Trailing stop triggered: price {} below trigger {} (peak: {}, distance: {}%)",
-                currentPrice, triggerPrice, position.getPeakPrice(), trailingDistance);
+                currentPrice, triggerPrice, exitState.getPeakPrice(), trailingDistance);
             return new ExitSignal(
                 ExitType.TRAILING_STOP,
                 new BigDecimal("100"),  // Close entire remaining position
@@ -154,7 +171,8 @@ public class ProfitManager {
     /**
      * Check staged exits based on profit milestones
      */
-    private List<ExitSignal> checkStagedExits(DCAPosition position, BigDecimal currentPrice, BigDecimal profitPct) {
+    private List<ExitSignal> checkStagedExits(Position position, PositionExitState exitState,
+                                               BigDecimal currentPrice, BigDecimal profitPct) {
         List<ExitSignal> exits = new ArrayList<>();
 
         if (!config.getProfitManagement().getStagedExits().isEnabled()) {
@@ -168,7 +186,7 @@ public class ProfitManager {
             SmartDCAConfig.ProfitManagement.StagedExits.ExitStage stage = stages.get(i);
 
             // Skip if already triggered
-            if (position.isStageTriggered(i)) {
+            if (exitState.isStageTriggered(i)) {
                 continue;
             }
 
@@ -178,7 +196,7 @@ public class ProfitManager {
                     i + 1, stage.getProfitThresholdPct(), stage.getClosePct());
 
                 // Mark stage as triggered
-                position.markStageTriggered(i);
+                exitState.markStageTriggered(i);
 
                 // Add exit signal
                 exits.add(new ExitSignal(
@@ -189,13 +207,13 @@ public class ProfitManager {
 
                 // Activate breakeven stop if configured
                 if (Boolean.TRUE.equals(stage.getMoveStopToBreakeven())) {
-                    position.activateBreakevenStop();
+                    exitState.activateBreakevenStop();
                     log.info("Breakeven stop activated at stage {}", i + 1);
                 }
 
                 // Activate trailing stop if configured
                 if (Boolean.TRUE.equals(stage.getActivateTrailing())) {
-                    position.activateTrailingStop();
+                    exitState.activateTrailingStop();
                     log.info("Trailing stop activated at stage {}", i + 1);
                 }
             }
@@ -207,7 +225,7 @@ public class ProfitManager {
     /**
      * Check technical exits based on RSI overbought conditions
      */
-    private List<ExitSignal> checkTechnicalExits(DCAPosition position, BigDecimal currentPrice,
+    private List<ExitSignal> checkTechnicalExits(Position position, BigDecimal currentPrice,
                                                   BigDecimal profitPct, BigDecimal rsi, BigDecimal ema200) {
         List<ExitSignal> exits = new ArrayList<>();
 

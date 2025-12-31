@@ -40,8 +40,13 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
     // Candle history for indicator calculation
     private final List<Candle> candleHistory;
 
-    // DCA position tracking (one logical position)
-    private DCAPosition dcaPosition;
+    // Single position tracking (futures model)
+    private String currentPositionId;  // null = no position
+    private PositionExitState exitState;  // Exit strategy state
+
+    // Last buy tracking (for cooldown)
+    private long lastBuyTimestamp;
+    private BigDecimal lastBuyPrice;
 
     // Peak equity tracking for drawdown
     private BigDecimal peakEquity;
@@ -51,11 +56,6 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
     private long pauseStartTimestamp;
     private BigDecimal priceAtPause;
 
-    // Pending exit state (for closing across multiple positions)
-    private BigDecimal pendingExitQuantity;
-    private BigDecimal pendingExitPercentage;
-    private String pendingExitReason;
-
     public SmartOpportunisticDCAAlgorithm(SmartDCAConfig config) {
         this.config = config;
         this.config.validate();
@@ -64,16 +64,16 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
         this.profitManager = new ProfitManager(config);
 
         this.candleHistory = new ArrayList<>();
-        this.dcaPosition = new DCAPosition();
+        this.currentPositionId = null;
+        this.exitState = new PositionExitState();
+
+        this.lastBuyTimestamp = 0;
+        this.lastBuyPrice = BigDecimal.ZERO;
 
         this.peakEquity = config.getStartingCapital();
         this.buyingPaused = false;
         this.pauseStartTimestamp = 0;
         this.priceAtPause = BigDecimal.ZERO;
-
-        this.pendingExitQuantity = BigDecimal.ZERO;
-        this.pendingExitPercentage = BigDecimal.ZERO;
-        this.pendingExitReason = null;
     }
 
     @Override
@@ -109,34 +109,37 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
         // Check drawdown pause/resume
         updateDrawdownState(portfolio, currentPrice, candle.timestamp());
 
-        // 1. Handle pending exits first (close positions in FIFO order)
-        if (pendingExitQuantity.compareTo(BigDecimal.ZERO) > 0 && !dcaPosition.isEmpty()) {
-            return processPendingExit(portfolio, currentPrice);
-        }
+        // 1. Check for exit signals if we have a position
+        if (currentPositionId != null) {
+            Position position = portfolio.getOpenPositions().get(currentPositionId);
 
-        // 2. Check for new exit signals
-        if (!dcaPosition.isEmpty()) {
-            BigDecimal ema200 = TechnicalIndicators.calculateEMAFull(candleHistory,
-                config.getBuyConditions().getEmaSupport().getPeriod());
+            if (position != null) {
+                BigDecimal ema200 = TechnicalIndicators.calculateEMAFull(candleHistory,
+                    config.getBuyConditions().getEmaSupport().getPeriod());
 
-            List<ProfitManager.ExitSignal> exitSignals = profitManager.evaluateExits(
-                dcaPosition, candleHistory, candle, ema200);
+                List<ProfitManager.ExitSignal> exitSignals = profitManager.evaluateExits(
+                    position, exitState, candleHistory, candle, ema200);
 
-            // Process exit signals (initiate pending exit)
-            if (!exitSignals.isEmpty()) {
-                return initiatePendingExit(exitSignals.get(0), currentPrice, portfolio);
+                // Process exit signal
+                if (!exitSignals.isEmpty()) {
+                    ProfitManager.ExitSignal signal = exitSignals.get(0);
+                    return executeExit(signal, position, currentPrice);
+                }
+            } else {
+                // Position not found in portfolio - reset tracking
+                log.warn("Current position {} not found in portfolio - resetting", currentPositionId);
+                currentPositionId = null;
+                exitState.reset();
             }
         }
 
-        // 3. Check buy signals (if not paused and have capital)
+        // 2. Check buy signals (if not paused and have capital)
         if (!buyingPaused && portfolio.getCashBalance().compareTo(BigDecimal.ZERO) > 0) {
             BuySignalEvaluator.BuySignal buySignal = buyEvaluator.evaluate(
                 candleHistory,
                 candle,
-                dcaPosition.getLastBuyTimestamp(),
-                dcaPosition.getLastBuyPrice().compareTo(BigDecimal.ZERO) > 0
-                    ? dcaPosition.getLastBuyPrice()
-                    : null
+                lastBuyTimestamp,
+                lastBuyPrice.compareTo(BigDecimal.ZERO) > 0 ? lastBuyPrice : null
             );
 
             if (buySignal != null) {
@@ -148,7 +151,8 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
     }
 
     /**
-     * Execute a buy decision
+     * Execute a buy decision.
+     * Returns OpenPosition if no current position, or IncreasePosition if adding to existing.
      */
     private TradingDecision executeBuy(BuySignalEvaluator.BuySignal signal,
                                        BigDecimal price, long timestamp,
@@ -171,153 +175,101 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
         // Calculate quantity
         BigDecimal quantity = investAmount.divide(price, 8, RoundingMode.HALF_UP);
 
-        // Check max concurrent positions
-        if (dcaPosition.getPositionCount() >= config.getRiskManagement().getMaxConcurrentPositions()) {
-            log.warn("Max concurrent positions reached: {}", config.getRiskManagement().getMaxConcurrentPositions());
-            return TradingDecision.Hold.INSTANCE;
-        }
+        // Update last buy tracking
+        lastBuyTimestamp = timestamp;
+        lastBuyPrice = price;
 
-        log.info("BUY: tier={}, price={}, qty={}, invest={}, RSI={}, drop={}%, current_avg_entry={}",
-            signal.getTier().getName(), price, quantity, investAmount,
-            signal.getRsi(), signal.getPriceDrop(),
-            dcaPosition.isEmpty() ? "N/A" : dcaPosition.getAvgEntryPrice());
+        if (currentPositionId == null) {
+            // No existing position - open new one
+            log.info("BUY (NEW): tier={}, price={}, qty={}, invest={}, RSI={}, drop={}%",
+                signal.getTier().getName(), price, quantity, investAmount,
+                signal.getRsi(), signal.getPriceDrop());
 
-        // NOTE: Don't modify capital here - Portfolio.addPosition() will deduct cashBalance
+            String metadata = String.format("%s | Entry: %.2f", signal.getTier().getName(), price);
 
-        // Calculate what the new weighted average entry will be after this buy
-        BigDecimal futureAvgEntry = dcaPosition.getTotalInvested().add(investAmount)
-            .divide(dcaPosition.getTotalQuantity().add(quantity), 8, RoundingMode.HALF_UP);
-
-        // Return decision to open position
-        // Store tier name and DCA weighted average in metadata for display
-        String metadata = String.format("%s | DCA Avg: %.2f", signal.getTier().getName(), futureAvgEntry);
-
-        return new TradingDecision.OpenPosition(
-            OrderSide.LONG,
-            quantity,
-            price,
-            metadata
-        );
-    }
-
-    /**
-     * Initiate a pending exit (sets up state for multi-position closing)
-     */
-    private TradingDecision initiatePendingExit(ProfitManager.ExitSignal signal, BigDecimal price, Portfolio portfolio) {
-        // Calculate total quantity to close
-        BigDecimal totalQtyToClose = dcaPosition.getTotalQuantity()
-            .multiply(signal.getPercentageToClose())
-            .divide(new BigDecimal("100"), 8, RoundingMode.HALF_UP);
-
-        // Set pending exit state
-        pendingExitQuantity = totalQtyToClose;
-        pendingExitPercentage = signal.getPercentageToClose();
-        pendingExitReason = signal.getReason();
-
-        log.info("EXIT INITIATED: type={}, close_pct={}%, reason={}, total_qty_to_close={}, avg_entry={}",
-            signal.getType(), signal.getPercentageToClose(), signal.getReason(),
-            totalQtyToClose, dcaPosition.getAvgEntryPrice());
-
-        // Process first close immediately
-        return processPendingExit(portfolio, price);
-    }
-
-    /**
-     * Process pending exit by closing positions in FIFO order
-     */
-    private TradingDecision processPendingExit(Portfolio portfolio, BigDecimal price) {
-        // Get oldest position ID
-        String oldestPositionId = dcaPosition.getOldestPositionId();
-
-        if (oldestPositionId == null) {
-            log.error("No position ID found but pendingExitQuantity > 0 - resetting pending state");
-            pendingExitQuantity = BigDecimal.ZERO;
-            pendingExitReason = null;
-            return TradingDecision.Hold.INSTANCE;
-        }
-
-        // Get the actual position from portfolio to know its quantity
-        Position oldestPosition = portfolio.getOpenPositions().get(oldestPositionId);
-
-        if (oldestPosition == null) {
-            log.error("Position {} not found in portfolio - resetting pending state", oldestPositionId);
-            pendingExitQuantity = BigDecimal.ZERO;
-            pendingExitReason = null;
-            return TradingDecision.Hold.INSTANCE;
-        }
-
-        // Determine how much to close from this position
-        BigDecimal qtyToCloseFromThisPosition;
-        boolean closeFullPosition;
-
-        BigDecimal availableQty = oldestPosition.getQuantity();
-
-        if (pendingExitQuantity.compareTo(availableQty) >= 0) {
-            // Close entire position
-            qtyToCloseFromThisPosition = availableQty;
-            closeFullPosition = true;
-        } else {
-            // Close partial
-            qtyToCloseFromThisPosition = pendingExitQuantity;
-            closeFullPosition = false;
-        }
-
-        // Close by exact quantity (more precise than percentage-based closing)
-        // This prevents floating point errors from accumulating
-        DCAPosition.CloseResult result;
-        try {
-            result = dcaPosition.closeByQuantity(qtyToCloseFromThisPosition, price);
-        } catch (IllegalArgumentException e) {
-            // Safeguard: If trying to close more than available, close everything
-            log.warn("Cannot close {} from DCA position (total={}): {}. Closing all remaining.",
-                qtyToCloseFromThisPosition, dcaPosition.getTotalQuantity(), e.getMessage());
-            result = dcaPosition.closeByQuantity(dcaPosition.getTotalQuantity(), price);
-        }
-
-        log.info("EXIT EXECUTING: close_qty={}, position_id={}, full={}, P&L={}, remaining_pending={}",
-            qtyToCloseFromThisPosition,
-            oldestPositionId.substring(0, 8),
-            closeFullPosition,
-            result.getRealizedPnL(),
-            pendingExitQuantity.subtract(qtyToCloseFromThisPosition));
-
-        // NOTE: Portfolio.closePartialPosition() already adds proceeds to cashBalance
-        // No need to modify availableCapital here (it would cause double-counting)
-        log.debug("P&L from close: {}, invested_recovered={}, total_proceeds={}",
-            result.getRealizedPnL(), result.getInvestedClosed(),
-            result.getRealizedPnL().add(result.getInvestedClosed()));
-
-        // Reduce pending exit quantity
-        pendingExitQuantity = pendingExitQuantity.subtract(qtyToCloseFromThisPosition);
-
-        // Remove position ID if we're closing it fully
-        // This prevents double-removal in onPositionClosed()
-        if (closeFullPosition) {
-            dcaPosition.removePositionId(oldestPositionId);
-            log.debug("Removed position ID {} from DCA tracking (full close)", oldestPositionId.substring(0, 8));
-        }
-
-        // Clear pending state if done
-        if (pendingExitQuantity.compareTo(new BigDecimal("0.00000001")) < 0) {
-            log.info("EXIT COMPLETED: {}%, reason={}, dca_total_qty={}, dca_position_count={}",
-                pendingExitPercentage, pendingExitReason,
-                dcaPosition.getTotalQuantity(), dcaPosition.getPositionCount());
-            pendingExitQuantity = BigDecimal.ZERO;
-            pendingExitPercentage = BigDecimal.ZERO;
-            pendingExitReason = null;
-        }
-
-        // Return close decision
-        if (closeFullPosition) {
-            return new TradingDecision.ClosePosition(oldestPositionId, price);
-        } else {
-            return new TradingDecision.ClosePositionPartial(
-                oldestPositionId,
-                qtyToCloseFromThisPosition,
+            return new TradingDecision.OpenPosition(
+                OrderSide.LONG,
+                quantity,
                 price,
-                pendingExitReason
+                metadata
+            );
+        } else {
+            // Existing position - increase it (futures-style DCA)
+            Position currentPosition = portfolio.getOpenPositions().get(currentPositionId);
+
+            if (currentPosition == null) {
+                log.error("Current position {} not found - opening new position instead", currentPositionId);
+                currentPositionId = null;
+                return executeBuy(signal, price, timestamp, portfolio);  // Retry as new position
+            }
+
+            // Calculate future weighted average entry
+            BigDecimal currentCost = currentPosition.getQuantity().multiply(currentPosition.getEntryPrice());
+            BigDecimal newCost = quantity.multiply(price);
+            BigDecimal totalCost = currentCost.add(newCost);
+            BigDecimal totalQty = currentPosition.getQuantity().add(quantity);
+            BigDecimal futureAvgEntry = totalCost.divide(totalQty, 8, RoundingMode.HALF_UP);
+
+            log.info("BUY (INCREASE): tier={}, price={}, qty={}, invest={}, RSI={}, drop={}%, current_avg={}, future_avg={}",
+                signal.getTier().getName(), price, quantity, investAmount,
+                signal.getRsi(), signal.getPriceDrop(),
+                currentPosition.getEntryPrice(), futureAvgEntry);
+
+            String metadata = String.format("%s | DCA Avg: %.2f", signal.getTier().getName(), futureAvgEntry);
+
+            return new TradingDecision.IncreasePosition(
+                currentPositionId,
+                quantity,
+                price,
+                metadata
             );
         }
+    }
+
+    /**
+     * Execute exit decision (simplified - no FIFO needed for single position)
+     */
+    private TradingDecision executeExit(ProfitManager.ExitSignal signal, Position position, BigDecimal price) {
+        BigDecimal percentageToClose = signal.getPercentageToClose();
+        boolean isFullClose = percentageToClose.compareTo(new BigDecimal("100")) >= 0;
+
+        if (isFullClose) {
+            log.info("EXIT (FULL): type={}, reason={}, avg_entry={}, exit_price={}, profit={}%",
+                signal.getType(), signal.getReason(),
+                position.getEntryPrice(), price,
+                calculateProfitPct(position.getEntryPrice(), price));
+
+            return new TradingDecision.ClosePosition(currentPositionId, price);
+        } else {
+            // Partial close
+            BigDecimal quantityToClose = position.getQuantity()
+                .multiply(percentageToClose)
+                .divide(new BigDecimal("100"), 8, RoundingMode.HALF_UP);
+
+            log.info("EXIT (PARTIAL): type={}, close_pct={}%, qty_to_close={}, reason={}, avg_entry={}, exit_price={}, profit={}%",
+                signal.getType(), percentageToClose, quantityToClose, signal.getReason(),
+                position.getEntryPrice(), price,
+                calculateProfitPct(position.getEntryPrice(), price));
+
+            return new TradingDecision.ClosePositionPartial(
+                currentPositionId,
+                quantityToClose,
+                price,
+                signal.getReason()
+            );
+        }
+    }
+
+    /**
+     * Calculate profit percentage
+     */
+    private BigDecimal calculateProfitPct(BigDecimal entryPrice, BigDecimal currentPrice) {
+        if (entryPrice.compareTo(BigDecimal.ZERO) == 0) {
+            return BigDecimal.ZERO;
+        }
+        return currentPrice.subtract(entryPrice)
+            .divide(entryPrice, 8, RoundingMode.HALF_UP)
+            .multiply(new BigDecimal("100"));
     }
 
     /**
@@ -380,33 +332,46 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
 
     @Override
     public void onPositionOpened(Position position) {
-        // Add purchase to DCA position
-        dcaPosition.addPurchase(
-            position.getQuantity(),
-            position.getEntryPrice(),
-            position.getOpenTimestamp(),
-            position.getId()
-        );
-
-        log.debug("Position opened: ID={}, qty={}, price={}, new_avg_entry={}, total_qty={}, position_count={}",
-            position.getId().substring(0, 8),
-            position.getQuantity(),
-            position.getEntryPrice(),
-            dcaPosition.getAvgEntryPrice(),
-            dcaPosition.getTotalQuantity(),
-            dcaPosition.getPositionCount());
+        // Set or confirm current position ID
+        if (currentPositionId == null) {
+            currentPositionId = position.getId();
+            log.info("Position opened (NEW): ID={}, qty={}, entry={}",
+                position.getId().substring(0, 8),
+                position.getQuantity(),
+                position.getEntryPrice());
+        } else {
+            // Position increased - currentPositionId should be the same
+            if (!currentPositionId.equals(position.getId())) {
+                log.warn("Position ID mismatch: current={}, opened={}",
+                    currentPositionId.substring(0, 8),
+                    position.getId().substring(0, 8));
+            }
+            log.info("Position increased: ID={}, qty={}, avg_entry={}",
+                position.getId().substring(0, 8),
+                position.getQuantity(),
+                position.getEntryPrice());
+        }
     }
 
     @Override
     public void onPositionClosed(ClosedPosition closedPosition) {
-        // NOTE: Position ID removal is handled in processPendingExit() when we know it's a full close.
-        // This callback is just for logging and metrics.
+        // Check if position was fully closed by comparing with remaining quantity
+        boolean isFullClose = closedPosition.getRemainingQuantity() == null ||
+                              closedPosition.getRemainingQuantity().compareTo(BigDecimal.ZERO) == 0;
 
-        log.debug("Position close callback: ID={}, P&L={}, qty={}, current_dca_positions={}",
+        log.info("Position closed: ID={}, P&L={}, qty_closed={}, remaining={}, full_close={}",
             closedPosition.getId().substring(0, 8),
             closedPosition.getRealizedPnL(),
             closedPosition.getQuantity(),
-            dcaPosition.getPositionCount());
+            closedPosition.getRemainingQuantity(),
+            isFullClose);
+
+        if (isFullClose && closedPosition.getId().equals(currentPositionId)) {
+            // Full close - reset tracking
+            currentPositionId = null;
+            exitState.reset();
+            log.info("Position fully closed - tracking reset");
+        }
     }
 
     @Override
@@ -416,8 +381,7 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
         state.putState("peakEquity", peakEquity);
         state.putState("buyingPaused", buyingPaused);
         state.putState("pauseStartTimestamp", pauseStartTimestamp);
-        // Note: Full DCAPosition serialization would need custom logic
-        // Note: availableCapital removed - use portfolio.getCashBalance() instead
+        // Note: currentPositionId and exitState are reconstructed from Portfolio on restore
         return state;
     }
 
@@ -426,7 +390,6 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
         this.peakEquity = state.getStateOrDefault("peakEquity", config.getStartingCapital());
         this.buyingPaused = state.getStateOrDefault("buyingPaused", false);
         this.pauseStartTimestamp = state.getStateOrDefault("pauseStartTimestamp", 0L);
-        // Note: Full DCAPosition restoration would need custom logic
-        // Note: availableCapital removed - use portfolio.getCashBalance() instead
+        // Note: currentPositionId and exitState are reconstructed from Portfolio on restore
     }
 }
