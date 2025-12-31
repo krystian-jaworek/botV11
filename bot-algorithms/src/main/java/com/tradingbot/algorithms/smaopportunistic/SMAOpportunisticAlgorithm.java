@@ -5,6 +5,7 @@ import com.tradingbot.core.algorithms.TradingAlgorithm;
 import com.tradingbot.core.algorithms.TradingDecision;
 import com.tradingbot.core.models.Candle;
 import com.tradingbot.core.models.ClosedPosition;
+import com.tradingbot.core.models.OrderSide;
 import com.tradingbot.core.models.Portfolio;
 import com.tradingbot.core.models.Position;
 import com.tradingbot.core.models.TradingPair;
@@ -71,19 +72,19 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
 
     @Override
     public void onPositionOpened(Position position) {
-        currentPositionId = position.id();
-        lastBuyTimestamp = position.openTimestamp();
+        currentPositionId = position.getId();
+        lastBuyTimestamp = position.getOpenTimestamp();
         log.info("Position opened: {} | Entry: {} | Quantity: {}",
-            position.id(), position.entryPrice(), position.quantity());
+            position.getId(), position.getEntryPrice(), position.getQuantity());
     }
 
     @Override
     public void onPositionClosed(ClosedPosition closedPosition) {
         log.info("Position closed: {} | Profit: {}% (${}) | Duration: {} candles",
-            closedPosition.id(),
-            closedPosition.profitPercentage(),
-            closedPosition.profitAbsolute(),
-            (closedPosition.closeTimestamp() - closedPosition.openTimestamp()) / 60000
+            closedPosition.getId(),
+            closedPosition.getProfitPercentage(),
+            closedPosition.getProfitAbsolute(),
+            (closedPosition.getCloseTimestamp() - closedPosition.getOpenTimestamp()) / 60000
         );
         currentPositionId = null;
         // Note: We DON'T reset lastBuyTimestamp here - cooldown continues
@@ -169,14 +170,14 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
         }
 
         // Check Take Profit: price >= entry + Z%
-        BigDecimal tpPrice = position.entryPrice().multiply(
+        BigDecimal tpPrice = position.getEntryPrice().multiply(
             BigDecimal.ONE.add(config.getTakeProfitPercent().divide(new BigDecimal("100"), 8, RoundingMode.HALF_UP))
         );
 
         if (currentPrice.compareTo(tpPrice) >= 0) {
             log.info("TP triggered: price {} >= TP price {} (entry + {}%)",
                 currentPrice, tpPrice, config.getTakeProfitPercent());
-            return new TradingDecision.ClosePosition(currentPositionId);
+            return new TradingDecision.ClosePosition(currentPositionId, currentPrice);
         }
 
         // Check DCA conditions:
@@ -255,7 +256,7 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
         }
 
         log.info("Opening position: quantity={}, price={}, value=${}", quantity, price, orderValue);
-        return new TradingDecision.OpenPosition(quantity, price);
+        return new TradingDecision.OpenPosition(OrderSide.LONG, quantity, price);
     }
 
     /**
@@ -298,12 +299,12 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
         }
 
         log.info("Increasing position {}: additional quantity={}, price={}, value=${}",
-            position.id(), quantity, price, orderValue);
+            position.getId(), quantity, price, orderValue);
 
         // Update lastBuyTimestamp when we successfully create DCA order
         lastBuyTimestamp = timestamp;
 
-        return new TradingDecision.IncreasePosition(position.id(), quantity, price);
+        return new TradingDecision.IncreasePosition(position.getId(), quantity, price);
     }
 
     @Override
