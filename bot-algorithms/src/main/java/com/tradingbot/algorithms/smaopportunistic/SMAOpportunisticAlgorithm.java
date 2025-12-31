@@ -82,8 +82,8 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
     public void onPositionClosed(ClosedPosition closedPosition) {
         log.info("Position closed: {} | Profit: {}% (${}) | Duration: {} candles",
             closedPosition.getId(),
-            closedPosition.getProfitPercentage(),
-            closedPosition.getProfitAbsolute(),
+            closedPosition.getRealizedPnLPercentage(),
+            closedPosition.getRealizedPnL(),
             (closedPosition.getCloseTimestamp() - closedPosition.getOpenTimestamp()) / 60000
         );
         currentPositionId = null;
