@@ -66,7 +66,7 @@ public class OpportunisticDCAAlgorithm implements TradingAlgorithm<Opportunistic
     }
 
     @Override
-    public void initialize(Portfolio portfolio) {
+    public void initialize(BigDecimal initialPrice) {
         log.info("Initializing {} algorithm", getName());
         log.info("Config: {}", config.getConfigId());
         log.info("Buy tiers: {}", config.getBuyTiers().size());
