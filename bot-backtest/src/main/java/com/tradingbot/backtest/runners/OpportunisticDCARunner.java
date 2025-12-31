@@ -1,7 +1,7 @@
 package com.tradingbot.backtest.runners;
 
-import com.tradingbot.algorithms.smartdca.SmartDCAConfig;
-import com.tradingbot.algorithms.smartdca.SmartOpportunisticDCAAlgorithm;
+import com.tradingbot.algorithms.opportunisticdca.OpportunisticDCAAlgorithm;
+import com.tradingbot.algorithms.opportunisticdca.OpportunisticDCAConfig;
 import com.tradingbot.backtest.data.CandleFileReader;
 import com.tradingbot.backtest.engine.BacktestEngine;
 import com.tradingbot.backtest.reporting.ConsoleReporter;
@@ -13,7 +13,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * Single-run runner for Smart Opportunistic DCA algorithm.
+ * Single-run runner for Opportunistic DCA algorithm.
  *
  * Usage: [candle-file]
  *
@@ -23,7 +23,7 @@ import java.util.List;
  *   BTCUSDT-5-90.txt → Uses custom file
  */
 @Slf4j
-public class SmartDCARunner {
+public class OpportunisticDCARunner {
 
     private static final BigDecimal INITIAL_CAPITAL = new BigDecimal("10000");
     private static final String DEFAULT_CANDLE_FILE = "BTCUSDT-1-365.txt";
@@ -58,7 +58,7 @@ public class SmartDCARunner {
     }
 
     private static void runSimulation(String candleFileName) throws Exception {
-        log.info("Starting Smart Opportunistic DCA simulation");
+        log.info("Starting Opportunistic DCA simulation");
         log.info("Candle file: {}", candleFileName);
 
         // Parse trading pair
@@ -72,8 +72,8 @@ public class SmartDCARunner {
         log.info("Loaded {} candles", candles.size());
 
         // Create algorithm with default config
-        SmartDCAConfig config = SmartDCAConfig.defaultConfig();
-        SmartOpportunisticDCAAlgorithm algorithm = new SmartOpportunisticDCAAlgorithm(config);
+        OpportunisticDCAConfig config = OpportunisticDCAConfig.defaultConfig();
+        OpportunisticDCAAlgorithm algorithm = new OpportunisticDCAAlgorithm(config);
 
         log.info("Algorithm config: {}", config.getConfigId());
 
@@ -89,7 +89,7 @@ public class SmartDCARunner {
 
         // Display results
         System.out.println("\n" + "=".repeat(80));
-        System.out.println("SIMULATION RESULTS - Smart Opportunistic DCA");
+        System.out.println("SIMULATION RESULTS - Opportunistic DCA");
         System.out.println("=".repeat(80));
         System.out.println("Algorithm:        " + algorithm.getName());
         System.out.println("Trading Pair:     " + tradingPair);
