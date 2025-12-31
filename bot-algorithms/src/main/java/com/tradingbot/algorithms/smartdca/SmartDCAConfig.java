@@ -1,6 +1,7 @@
 package com.tradingbot.algorithms.smartdca;
 
 import com.tradingbot.core.algorithms.AlgorithmConfig;
+import com.tradingbot.core.models.TradingPair;
 import lombok.Builder;
 import lombok.Value;
 
@@ -28,6 +29,7 @@ public class SmartDCAConfig implements AlgorithmConfig {
     String algorithmName;
     String asset;
     String timeframe;
+    TradingPair tradingPair;
     BigDecimal startingCapital;
     BigDecimal maxPortfolioAllocationPct;
 

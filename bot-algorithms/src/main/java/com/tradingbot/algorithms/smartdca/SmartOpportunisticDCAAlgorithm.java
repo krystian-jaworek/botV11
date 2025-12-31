@@ -173,24 +173,28 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
         }
 
         // Calculate quantity
-        BigDecimal quantity = investAmount.divide(price, 8, RoundingMode.HALF_UP);
+        BigDecimal rawQuantity = investAmount.divide(price, 8, RoundingMode.HALF_UP);
+
+        // Round to exchange precision
+        BigDecimal quantity = config.getTradingPair().roundQuantity(rawQuantity);
+        BigDecimal roundedPrice = config.getTradingPair().roundPrice(price);
 
         // Update last buy tracking
         lastBuyTimestamp = timestamp;
-        lastBuyPrice = price;
+        lastBuyPrice = roundedPrice;
 
         if (currentPositionId == null) {
             // No existing position - open new one
             log.info("BUY (NEW): tier={}, price={}, qty={}, invest={}, RSI={}, drop={}%",
-                signal.getTier().getName(), price, quantity, investAmount,
+                signal.getTier().getName(), roundedPrice, quantity, investAmount,
                 signal.getRsi(), signal.getPriceDrop());
 
-            String metadata = String.format("%s | Entry: %.2f", signal.getTier().getName(), price);
+            String metadata = String.format("%s | Entry: %.2f", signal.getTier().getName(), roundedPrice);
 
             return new TradingDecision.OpenPosition(
                 OrderSide.LONG,
                 quantity,
-                price,
+                roundedPrice,
                 metadata
             );
         } else {
@@ -205,13 +209,13 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
 
             // Calculate future weighted average entry
             BigDecimal currentCost = currentPosition.getQuantity().multiply(currentPosition.getEntryPrice());
-            BigDecimal newCost = quantity.multiply(price);
+            BigDecimal newCost = quantity.multiply(roundedPrice);
             BigDecimal totalCost = currentCost.add(newCost);
             BigDecimal totalQty = currentPosition.getQuantity().add(quantity);
             BigDecimal futureAvgEntry = totalCost.divide(totalQty, 8, RoundingMode.HALF_UP);
 
             log.info("BUY (INCREASE): tier={}, price={}, qty={}, invest={}, RSI={}, drop={}%, current_avg={}, future_avg={}",
-                signal.getTier().getName(), price, quantity, investAmount,
+                signal.getTier().getName(), roundedPrice, quantity, investAmount,
                 signal.getRsi(), signal.getPriceDrop(),
                 currentPosition.getEntryPrice(), futureAvgEntry);
 
@@ -220,7 +224,7 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
             return new TradingDecision.IncreasePosition(
                 currentPositionId,
                 quantity,
-                price,
+                roundedPrice,
                 metadata
             );
         }
@@ -233,28 +237,34 @@ public class SmartOpportunisticDCAAlgorithm implements TradingAlgorithm<SmartDCA
         BigDecimal percentageToClose = signal.getPercentageToClose();
         boolean isFullClose = percentageToClose.compareTo(new BigDecimal("100")) >= 0;
 
+        // Round price to exchange precision
+        BigDecimal roundedPrice = config.getTradingPair().roundPrice(price);
+
         if (isFullClose) {
             log.info("EXIT (FULL): type={}, reason={}, avg_entry={}, exit_price={}, profit={}%",
                 signal.getType(), signal.getReason(),
-                position.getEntryPrice(), price,
-                calculateProfitPct(position.getEntryPrice(), price));
+                position.getEntryPrice(), roundedPrice,
+                calculateProfitPct(position.getEntryPrice(), roundedPrice));
 
-            return new TradingDecision.ClosePosition(currentPositionId, price);
+            return new TradingDecision.ClosePosition(currentPositionId, roundedPrice);
         } else {
             // Partial close
-            BigDecimal quantityToClose = position.getQuantity()
+            BigDecimal rawQuantityToClose = position.getQuantity()
                 .multiply(percentageToClose)
                 .divide(new BigDecimal("100"), 8, RoundingMode.HALF_UP);
 
+            // Round quantity to exchange precision
+            BigDecimal quantityToClose = config.getTradingPair().roundQuantity(rawQuantityToClose);
+
             log.info("EXIT (PARTIAL): type={}, close_pct={}%, qty_to_close={}, reason={}, avg_entry={}, exit_price={}, profit={}%",
                 signal.getType(), percentageToClose, quantityToClose, signal.getReason(),
-                position.getEntryPrice(), price,
-                calculateProfitPct(position.getEntryPrice(), price));
+                position.getEntryPrice(), roundedPrice,
+                calculateProfitPct(position.getEntryPrice(), roundedPrice));
 
             return new TradingDecision.ClosePositionPartial(
                 currentPositionId,
                 quantityToClose,
-                price,
+                roundedPrice,
                 signal.getReason()
             );
         }

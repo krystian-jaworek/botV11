@@ -1,6 +1,7 @@
 package com.tradingbot.backtest.permutation;
 
 import com.tradingbot.algorithms.smartdca.SmartDCAConfig;
+import com.tradingbot.core.models.TradingPair;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -107,6 +108,7 @@ public class SmartDCAParameterPermutation {
             .algorithmName("Smart Opportunistic DCA")
             .asset("BTCUSDT")
             .timeframe("4h")
+            .tradingPair(TradingPair.BTCUSDT)
             .startingCapital(new BigDecimal("10000"))
             .maxPortfolioAllocationPct(new BigDecimal("100"))
             .buyConditions(SmartDCAConfig.BuyConditions.builder()
