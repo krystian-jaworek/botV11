@@ -179,19 +179,42 @@ public class SMAOpportunisticPermutationRunner {
 
         // Aggregate and display results
         log.info("Aggregating results...");
-        ResultsAggregator aggregator = new ResultsAggregator(results);
+        ResultsAggregator.Summary summary = ResultsAggregator.aggregate(results);
 
-        // Print top 10 configurations
-        log.info("\n" + "=".repeat(120));
-        log.info("TOP 10 CONFIGURATIONS (by profit %)");
-        log.info("=".repeat(120));
-        aggregator.printTopConfigurations(10);
+        System.out.println();
+        System.out.println(summary);
+        System.out.println();
 
-        // Print summary statistics
-        log.info("\n" + "=".repeat(120));
-        log.info("SUMMARY STATISTICS");
-        log.info("=".repeat(120));
-        aggregator.printSummaryStatistics();
+        // Display top 10 configurations with algorithm config
+        System.out.println("===== TOP 10 CONFIGURATIONS =====");
+
+        // Get top 10 results with their configs
+        List<SimulationTask.Result> topTenWithConfigs = results.stream()
+            .filter(SimulationTask.Result::isSuccess)
+            .filter(r -> !r.getSimulationResult().isInterrupted())
+            .sorted((a, b) -> b.getSimulationResult().getProfitPercentage()
+                .compareTo(a.getSimulationResult().getProfitPercentage()))
+            .limit(10)
+            .collect(java.util.stream.Collectors.toList());
+
+        for (int i = 0; i < topTenWithConfigs.size(); i++) {
+            var taskResult = topTenWithConfigs.get(i);
+            var result = taskResult.getSimulationResult();
+            SMAOpportunisticConfig config = (SMAOpportunisticConfig) taskResult.getAlgorithmConfig();
+
+            System.out.printf("%d. Profit: %.2f%% | Max DD: %.2f%% | Trades: %d%n",
+                i + 1,
+                result.getProfitPercentage(),
+                result.getMaxPortfolioDrawdownPercentage(),
+                result.getTotalTrades()
+            );
+            System.out.printf("   Config: %s%n", config.getConfigId());
+            System.out.printf("   Final Balance: $%.2f | Profit: $%.2f%n",
+                result.getFinalBalance(),
+                result.getProfitAbsolute()
+            );
+            System.out.println();
+        }
 
         log.info("\nPermutation run completed successfully");
         System.exit(0);
