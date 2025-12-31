@@ -38,6 +38,7 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
     // Position tracking (single position model - futures style)
     private String currentPositionId;
     private long lastBuyTimestamp;
+    private BigDecimal initialPositionValue;  // USD value of first position (for consistent DCA sizing)
 
     public SMAOpportunisticAlgorithm(SMAOpportunisticConfig config) {
         this.config = config;
@@ -45,6 +46,7 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
         this.candleHistory = new ArrayList<>();
         this.currentPositionId = null;
         this.lastBuyTimestamp = 0;
+        this.initialPositionValue = null;
     }
 
     @Override
@@ -72,10 +74,17 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
 
     @Override
     public void onPositionOpened(Position position) {
-        currentPositionId = position.getId();
-        lastBuyTimestamp = position.getOpenTimestamp();
-        log.info("Position opened: {} | Entry: {} | Quantity: {}",
-            position.getId(), position.getEntryPrice(), position.getQuantity());
+        // Only update on FIRST open (when currentPositionId is null)
+        // Do NOT update on IncreasePosition to avoid resetting cooldown
+        if (currentPositionId == null) {
+            currentPositionId = position.getId();
+            lastBuyTimestamp = position.getOpenTimestamp();
+            log.info("Position opened: {} | Entry: {} | Quantity: {}",
+                position.getId(), position.getEntryPrice(), position.getQuantity());
+        } else {
+            log.debug("Position increased: {} | New Entry: {} | Total Quantity: {}",
+                position.getId(), position.getEntryPrice(), position.getQuantity());
+        }
     }
 
     @Override
@@ -87,6 +96,7 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
             (closedPosition.getCloseTimestamp() - closedPosition.getOpenTimestamp()) / 60000
         );
         currentPositionId = null;
+        initialPositionValue = null;  // Reset for next position
         // Note: We DON'T reset lastBuyTimestamp here - cooldown continues
     }
 
@@ -141,11 +151,14 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
         log.info("Entry signal: price {} < threshold {} (SMA - {}%)",
             currentPrice, smaThreshold, config.getSmaDeviationPercent());
 
-        // Calculate position size: Y% of portfolio
+        // Calculate position size: Y% of portfolio (at time of FIRST entry)
         BigDecimal totalCash = portfolio.getCashBalance();
         BigDecimal positionValue = totalCash
             .multiply(config.getPositionSizePercent())
             .divide(new BigDecimal("100"), 8, RoundingMode.HALF_UP);
+
+        // Store initial position value for consistent DCA sizing
+        initialPositionValue = positionValue;
 
         // Validate order
         TradingDecision decision = validateAndCreateBuyOrder(positionValue, currentPrice, totalCash, currentTimestamp);
@@ -200,14 +213,13 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
         log.info("DCA signal: cooldown passed ({} hours), price {} < threshold {}",
             timeSinceLastBuy / 3600000, currentPrice, smaThreshold);
 
-        BigDecimal totalCash = portfolio.getCashBalance();
-        BigDecimal additionalValue = totalCash
-            .multiply(config.getPositionSizePercent())
-            .divide(new BigDecimal("100"), 8, RoundingMode.HALF_UP);
+        // Use SAME position value as initial entry (not current cash %)
+        // This ensures consistent DCA sizing regardless of remaining cash
+        BigDecimal dcaValue = initialPositionValue;
 
         // Validate and create increase order
         TradingDecision decision = validateAndCreateIncreaseOrder(
-            position, additionalValue, currentPrice, totalCash, currentTimestamp
+            position, dcaValue, currentPrice, portfolio.getCashBalance(), currentTimestamp
         );
         if (decision != null) {
             return decision;
