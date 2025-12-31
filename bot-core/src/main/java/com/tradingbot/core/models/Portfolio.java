@@ -188,8 +188,8 @@ public class Portfolio {
             Position updatedPosition = new Position(
                 position.getId(),
                 position.getSide(),
-                remainingQuantity,
                 position.getEntryPrice(),
+                remainingQuantity,
                 position.getOpenTimestamp(),
                 position.getMetadata()
             );
