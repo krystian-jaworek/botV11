@@ -11,18 +11,32 @@ import java.math.RoundingMode;
  * Simulation should be interrupted if:
  * 1. Portfolio equity drops below 25% of maximum equity
  * 2. Portfolio equity drops below 25% of initial balance
+ * 3. (Early stopping) After 50% of candles processed, if loss > 50%
+ * 4. (Early stopping) After 25% of candles processed, if no trades executed
  */
 @Slf4j
 public class SimulationInterruptor {
 
     private static final BigDecimal TWENTY_FIVE_PERCENT = new BigDecimal("0.25");
+    private static final BigDecimal FIFTY_PERCENT = new BigDecimal("0.50");
 
     private final BigDecimal initialBalance;
     private final BigDecimal minEquityFromInitial;
+    private final int totalCandles;
 
-    public SimulationInterruptor(BigDecimal initialBalance) {
+    private boolean hasHadAnyTrades = false;
+
+    public SimulationInterruptor(BigDecimal initialBalance, int totalCandles) {
         this.initialBalance = initialBalance;
         this.minEquityFromInitial = initialBalance.multiply(TWENTY_FIVE_PERCENT);
+        this.totalCandles = totalCandles;
+    }
+
+    /**
+     * Notify that a trade was executed
+     */
+    public void notifyTradeExecuted() {
+        this.hasHadAnyTrades = true;
     }
 
     /**
@@ -30,9 +44,10 @@ public class SimulationInterruptor {
      *
      * @param portfolio Current portfolio state
      * @param currentPrice Current market price
+     * @param processedCandles Number of candles processed so far
      * @return Interruption reason if should interrupt, null otherwise
      */
-    public String shouldInterrupt(Portfolio portfolio, BigDecimal currentPrice) {
+    public String shouldInterrupt(Portfolio portfolio, BigDecimal currentPrice, int processedCandles) {
         BigDecimal currentEquity = portfolio.getEquity(currentPrice);
         BigDecimal maxEquity = portfolio.getMaxEquity();
 
@@ -57,6 +72,32 @@ public class SimulationInterruptor {
             );
             log.warn("Simulation interrupted: {}", reason);
             return reason;
+        }
+
+        // Early stopping condition 3: After 50% of candles, if loss > 50%
+        if (processedCandles >= totalCandles / 2) {
+            BigDecimal lossThreshold = initialBalance.multiply(FIFTY_PERCENT);
+            if (currentEquity.compareTo(lossThreshold) < 0) {
+                BigDecimal dropPercentage = calculateDropPercentage(initialBalance, currentEquity);
+                String reason = String.format(
+                    "Early stop: Loss > 50%% after 50%% of simulation (current: %.2f, initial: %.2f, drop: %.2f%%)",
+                    currentEquity, initialBalance, dropPercentage
+                );
+                log.info("Simulation interrupted (early stop): {}", reason);
+                return reason;
+            }
+        }
+
+        // Early stopping condition 4: After 25% of candles, if no trades executed
+        if (processedCandles >= totalCandles / 4) {
+            if (!hasHadAnyTrades) {
+                String reason = String.format(
+                    "Early stop: No trades after 25%% of simulation (%d/%d candles)",
+                    processedCandles, totalCandles
+                );
+                log.info("Simulation interrupted (early stop): {}", reason);
+                return reason;
+            }
         }
 
         return null;  // No interruption

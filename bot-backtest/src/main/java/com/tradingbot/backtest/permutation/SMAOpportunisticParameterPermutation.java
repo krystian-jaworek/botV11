@@ -47,46 +47,51 @@ public class SMAOpportunisticParameterPermutation {
     }
 
     /**
+     * Generate range of BigDecimal values
+     * @param start Start value (inclusive)
+     * @param end End value (inclusive)
+     * @param step Step between values
+     * @return List of BigDecimal values
+     */
+    private static List<BigDecimal> range(double start, double end, double step) {
+        List<BigDecimal> values = new ArrayList<>();
+        for (double value = start; value <= end + 0.001; value += step) {  // +0.001 for floating point tolerance
+            values.add(new BigDecimal(String.valueOf(value)));
+        }
+        return values;
+    }
+
+    /**
+     * Generate range of Integer values
+     * @param start Start value (inclusive)
+     * @param end End value (inclusive)
+     * @param step Step between values
+     * @return List of Integer values
+     */
+    private static List<Integer> rangeInt(int start, int end, int step) {
+        List<Integer> values = new ArrayList<>();
+        for (int value = start; value <= end; value += step) {
+            values.add(value);
+        }
+        return values;
+    }
+
+    /**
      * Create default permutation with reasonable parameter ranges
      *
      * Generates moderate number of configurations for comprehensive testing
      */
     public static SMAOpportunisticParameterPermutation defaultPermutation() {
-        List<Integer> periods = new ArrayList<>();
-        for (int period = 600; period <= 2040; period += 240) {  // 600, 840, 1080, ..., 2040
-            periods.add(period);
-        }
-
         return new SMAOpportunisticParameterPermutation(
-            periods,                                          // SMA: 600-2040 step 240 (7 values)
-            List.of(                                         // Y: Position size
-                new BigDecimal("3.0"),
-                new BigDecimal("5.0"),
-                new BigDecimal("7.0")                        // 3 values
-            ),
-            List.of(                                         // X: SMA deviation
-                new BigDecimal("1.5"),
-                new BigDecimal("2.0"),
-                new BigDecimal("2.5")                        // 3 values
-            ),
-            List.of(                                         // Z: Take profit
-                new BigDecimal("2.0"),
-                new BigDecimal("3.0"),
-                new BigDecimal("4.0")                        // 3 values
-            ),
-            List.of(12, 24, 48),                             // B: Cooldown (3 values)
-            List.of(                                         // Min price drop
-                new BigDecimal("0.5"),
-                new BigDecimal("1.0"),
-                new BigDecimal("1.5")                        // 3 values
-            ),
-            List.of(                                         // Aggressive DCA drop
-                new BigDecimal("3.0"),
-                new BigDecimal("5.0"),
-                new BigDecimal("7.0")                        // 3 values
-            )
+            rangeInt(600, 2040, 240),        // SMA: 600-2040 step 240 (7 values)
+            range(3.0, 7.0, 2.0),            // Y: Position size 3%-7% step 2% (3 values)
+            range(1.5, 2.5, 0.5),            // X: SMA deviation 1.5%-2.5% step 0.5% (3 values)
+            range(2.0, 4.0, 1.0),            // Z: Take profit 2%-4% step 1% (3 values)
+            rangeInt(12, 48, 12),            // B: Cooldown 12h-48h step 12h (4 values)
+            range(0.5, 1.5, 0.5),            // Min price drop 0.5%-1.5% step 0.5% (3 values)
+            range(3.0, 7.0, 2.0)             // Aggressive DCA 3%-7% step 2% (3 values)
         );
-        // Total: 7 * 3 * 3 * 3 * 3 * 3 * 3 = 5103 configurations
+        // Total: 7 * 3 * 3 * 3 * 4 * 3 * 3 = 6804 configurations
     }
 
     /**
@@ -104,6 +109,23 @@ public class SMAOpportunisticParameterPermutation {
             List.of(new BigDecimal("5.0"))                  // Aggressive DCA: 5%
         );
         // Total: 1 configuration (for testing)
+    }
+
+    /**
+     * Create quick permutation for faster testing
+     * Reduced parameter space for quicker iteration
+     */
+    public static SMAOpportunisticParameterPermutation quickPermutation() {
+        return new SMAOpportunisticParameterPermutation(
+            rangeInt(600, 1800, 400),        // SMA: 600-1800 step 400 (4 values)
+            range(5.0, 7.0, 2.0),            // Y: Position size 5%-7% step 2% (2 values)
+            range(1.5, 2.5, 0.5),            // X: SMA deviation 1.5%-2.5% step 0.5% (3 values)
+            range(2.0, 4.0, 1.0),            // Z: Take profit 2%-4% step 1% (3 values)
+            rangeInt(24, 48, 24),            // B: Cooldown 24h-48h step 24h (2 values)
+            range(0.5, 1.5, 0.5),            // Min price drop 0.5%-1.5% step 0.5% (3 values)
+            range(3.0, 7.0, 2.0)             // Aggressive DCA 3%-7% step 2% (3 values)
+        );
+        // Total: 4 * 2 * 3 * 3 * 2 * 3 * 3 = 1296 configurations
     }
 
     /**

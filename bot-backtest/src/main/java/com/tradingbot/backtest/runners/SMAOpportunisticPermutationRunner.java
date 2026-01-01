@@ -114,9 +114,10 @@ public class SMAOpportunisticPermutationRunner {
         log.info("  Position size (Y): 3%, 5%, 7%");
         log.info("  SMA deviation (X): 1.5%, 2%, 2.5%");
         log.info("  Take profit (Z): 2%, 3%, 4%");
-        log.info("  Cooldown (B): 12h, 24h, 48h");
+        log.info("  Cooldown (B): 12h, 24h, 36h, 48h");
         log.info("  Min price drop: 0.5%, 1%, 1.5%");
         log.info("  Aggressive DCA: 3%, 5%, 7%");
+        log.info("Early stopping enabled: loss > 50% after 50% of simulation OR no trades after 25%");
 
         // Create simulation tasks
         List<SimulationTask> tasks = new ArrayList<>();

@@ -68,7 +68,7 @@ public class BacktestEngine {
         Portfolio portfolio = new Portfolio(initialBalance);
         OrderExecutor orderExecutor = new MockOrderExecutor(portfolio);
         BacktestMarketDataProvider dataProvider = new BacktestMarketDataProvider(candles);
-        SimulationInterruptor interruptor = new SimulationInterruptor(initialBalance);
+        SimulationInterruptor interruptor = new SimulationInterruptor(initialBalance, candles.size());
 
         // Metrics trackers
         MetricsCalculator.PositionDrawdownTracker positionTracker = new MetricsCalculator.PositionDrawdownTracker();
@@ -123,7 +123,7 @@ public class BacktestEngine {
             }
 
             // Check for interruption conditions
-            String interruptReason = interruptor.shouldInterrupt(portfolio, currentPrice);
+            String interruptReason = interruptor.shouldInterrupt(portfolio, currentPrice, processedCandles);
             if (interruptReason != null) {
                 interrupted = true;
                 interruptionReason = interruptReason;
@@ -135,7 +135,7 @@ public class BacktestEngine {
             TradingDecision decision = algorithm.onCandle(currentCandle, portfolio);
 
             // Execute decision
-            executeDecision(decision, orderExecutor, currentCandle, portfolio, algorithm, filledOrders);
+            executeDecision(decision, orderExecutor, currentCandle, portfolio, algorithm, filledOrders, interruptor);
 
             // Move to next candle
             if (dataProvider.hasNext()) {
@@ -174,7 +174,8 @@ public class BacktestEngine {
      */
     private void executeDecision(TradingDecision decision, OrderExecutor executor,
                                  Candle currentCandle, Portfolio portfolio,
-                                 TradingAlgorithm<?> algorithm, List<FilledOrder> filledOrders) {
+                                 TradingAlgorithm<?> algorithm, List<FilledOrder> filledOrders,
+                                 SimulationInterruptor interruptor) {
         switch (decision) {
             case TradingDecision.OpenPosition open -> {
                 Position position = executor.openPosition(
@@ -197,6 +198,9 @@ public class BacktestEngine {
                     .build();
                 filledOrders.add(filledOrder);
 
+                // Notify interruptor about trade
+                interruptor.notifyTradeExecuted();
+
                 algorithm.onPositionOpened(position);
                 notifyPositionOpened(position, currentCandle, portfolio);
             }
@@ -218,6 +222,9 @@ public class BacktestEngine {
                     .realizedPnL(null)
                     .build();
                 filledOrders.add(filledOrder);
+
+                // Notify interruptor about trade
+                interruptor.notifyTradeExecuted();
 
                 // Notify about position update (reuse onPositionOpened for now)
                 algorithm.onPositionOpened(updatedPosition);
