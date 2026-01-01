@@ -215,11 +215,15 @@ public class SMAOpportunisticPermutationRunner {
             var result = taskResult.getSimulationResult();
             SMAOpportunisticConfig config = (SMAOpportunisticConfig) taskResult.getAlgorithmConfig();
 
-            System.out.printf("%d. Profit: %.2f%% | Max DD: %.2f%% | Trades: %d%n",
+            System.out.printf("%d. Profit: %.2f%% | Trades: %d%n",
                 i + 1,
                 result.getProfitPercentage(),
-                result.getMaxPortfolioDrawdownPercentage(),
                 result.getTotalTradesExecuted()
+            );
+            System.out.printf("   Max Portfolio DD: %.2f%% | Max Position DD: %.2f%% | Min Cash: $%.2f%n",
+                result.getMaxPortfolioDrawdownPercentage(),
+                result.getMaxPositionDrawdownPercentage(),
+                result.getMinCashBalance()
             );
             System.out.printf("   Config: %s%n", config.getConfigId());
             System.out.printf("   Final Balance: $%.2f | Profit: $%.2f%n",
