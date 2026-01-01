@@ -44,6 +44,10 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
     private final BigDecimal minPriceDropMultiplier;
     private final BigDecimal aggressiveDcaDropMultiplier;
 
+    // SMA sliding window state (for O(1) SMA calculation)
+    private BigDecimal smaSum;
+    private int smaCount;
+
     // Position tracking (single position model - futures style)
     private String currentPositionId;
     private long lastBuyTimestamp;
@@ -68,6 +72,10 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
         this.aggressiveDcaDropMultiplier = BigDecimal.ONE.subtract(
             config.getAggressiveDcaDropPercent().divide(ONE_HUNDRED, 8, RoundingMode.HALF_UP)
         );
+
+        // Initialize SMA sliding window
+        this.smaSum = BigDecimal.ZERO;
+        this.smaCount = 0;
 
         this.currentPositionId = null;
         this.lastBuyTimestamp = 0;
@@ -132,18 +140,26 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
     @Override
     public TradingDecision onCandle(Candle candle, Portfolio portfolio) {
         // Add candle to history
-        candleHistory.add(candle);
+        candleHistory.addLast(candle);
+
+        // Update sliding window SMA
+        smaSum = smaSum.add(candle.close());
+        smaCount++;
+
+        // Remove oldest candle if we exceed the period
+        if (candleHistory.size() > config.getSmaPeriod()) {
+            Candle oldest = candleHistory.removeFirst();
+            smaSum = smaSum.subtract(oldest.close());
+            smaCount--;
+        }
 
         // Need enough candles for SMA calculation
         if (candleHistory.size() < config.getSmaPeriod()) {
             return TradingDecision.Hold.INSTANCE;
         }
 
-        // Calculate current SMA
-        BigDecimal currentSMA = calculateSMA(config.getSmaPeriod());
-        if (currentSMA == null) {
-            return TradingDecision.Hold.INSTANCE;
-        }
+        // Calculate current SMA using sliding window (O(1) operation)
+        BigDecimal currentSMA = smaSum.divide(new BigDecimal(smaCount), 8, RoundingMode.HALF_UP);
 
         BigDecimal currentPrice = candle.close();
         long currentTimestamp = candle.timestamp();
@@ -402,26 +418,5 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
     @Override
     public void restoreState(AlgorithmState state) {
         // TODO: Implement state restoration if needed
-    }
-
-    /**
-     * Calculate Simple Moving Average based on closing prices
-     *
-     * @param period Number of candles to include in SMA
-     * @return SMA value or null if not enough data
-     */
-    private BigDecimal calculateSMA(int period) {
-        if (candleHistory.size() < period) {
-            return null;
-        }
-
-        // Calculate sum of last N candles using stream (works with Deque)
-        BigDecimal sum = candleHistory.stream()
-            .skip(Math.max(0, candleHistory.size() - period))
-            .map(Candle::close)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        // Calculate average
-        return sum.divide(new BigDecimal(period), 8, RoundingMode.HALF_UP);
     }
 }
