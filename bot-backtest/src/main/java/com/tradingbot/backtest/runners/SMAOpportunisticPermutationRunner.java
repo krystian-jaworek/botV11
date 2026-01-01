@@ -105,18 +105,24 @@ public class SMAOpportunisticPermutationRunner {
         log.info("Loaded {} candles", candles.size());
 
         // Generate parameter permutations
-        SMAOpportunisticParameterPermutation permutation = SMAOpportunisticParameterPermutation.defaultPermutation();
+        // Choose one:
+        // - defaultPermutation() = broad search (6804 configs)
+        // - finetunePermutation() = local search around best config (1215 configs)
+        // - quickPermutation() = fast test (1296 configs)
+        SMAOpportunisticParameterPermutation permutation = SMAOpportunisticParameterPermutation.finetunePermutation();
         List<SMAOpportunisticConfig> configurations = permutation.generateConfigurations();
 
         log.info("Generated {} configurations", configurations.size());
+        log.info("FINE-TUNE MODE: Local search around best found configuration");
+        log.info("Center values: SMA=840, Size=7%, Dev=2.5%, TP=3%, Cool=12h, MinDrop=1%, AggrDCA=3%");
         log.info("Parameter ranges:");
-        log.info("  SMA period: 600-2040 (step 240)");
-        log.info("  Position size (Y): 3%, 5%, 7%");
-        log.info("  SMA deviation (X): 1.5%, 2%, 2.5%");
-        log.info("  Take profit (Z): 2%, 3%, 4%");
-        log.info("  Cooldown (B): 12h, 24h, 36h, 48h");
-        log.info("  Min price drop: 0.5%, 1%, 1.5%");
-        log.info("  Aggressive DCA: 3%, 5%, 7%");
+        log.info("  SMA period: 720-960 (step 60) - 5 values");
+        log.info("  Position size (Y): 6.5%-7.5% (step 0.5) - 3 values");
+        log.info("  SMA deviation (X): 2.25%-2.75% (step 0.25) - 3 values");
+        log.info("  Take profit (Z): 2.75%-3.25% (step 0.25) - 3 values");
+        log.info("  Cooldown (B): 12h (fixed) - 1 value");
+        log.info("  Min price drop: 0.75%-1.25% (step 0.25) - 3 values");
+        log.info("  Aggressive DCA: 2.5%-3.5% (step 0.5) - 3 values");
         log.info("Early stopping enabled: loss > 50% after 50% of simulation OR no trades after 25%");
 
         // Create simulation tasks
