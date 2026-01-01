@@ -13,8 +13,8 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.ArrayDeque;
+import java.util.Deque;
 
 /**
  * SMA Opportunistic Algorithm
@@ -33,9 +33,16 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
 
     private static final BigDecimal MINIMUM_ORDER_VALUE_USD = new BigDecimal("10.0");
     private static final BigDecimal MINIMUM_CASH_RESERVE_USD = new BigDecimal("50.0");
+    private static final BigDecimal ONE_HUNDRED = new BigDecimal("100");
 
     private final SMAOpportunisticConfig config;
-    private final List<Candle> candleHistory;
+    private final Deque<Candle> candleHistory;
+
+    // Cached multipliers (computed once in constructor for performance)
+    private final BigDecimal smaDeviationMultiplier;
+    private final BigDecimal takeProfitMultiplier;
+    private final BigDecimal minPriceDropMultiplier;
+    private final BigDecimal aggressiveDcaDropMultiplier;
 
     // Position tracking (single position model - futures style)
     private String currentPositionId;
@@ -46,7 +53,22 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
     public SMAOpportunisticAlgorithm(SMAOpportunisticConfig config) {
         this.config = config;
         this.config.validate();
-        this.candleHistory = new ArrayList<>();
+        this.candleHistory = new ArrayDeque<>();
+
+        // Pre-compute multipliers for hot path performance
+        this.smaDeviationMultiplier = BigDecimal.ONE.subtract(
+            config.getSmaDeviationPercent().divide(ONE_HUNDRED, 8, RoundingMode.HALF_UP)
+        );
+        this.takeProfitMultiplier = BigDecimal.ONE.add(
+            config.getTakeProfitPercent().divide(ONE_HUNDRED, 8, RoundingMode.HALF_UP)
+        );
+        this.minPriceDropMultiplier = BigDecimal.ONE.subtract(
+            config.getMinPriceDropPercent().divide(ONE_HUNDRED, 8, RoundingMode.HALF_UP)
+        );
+        this.aggressiveDcaDropMultiplier = BigDecimal.ONE.subtract(
+            config.getAggressiveDcaDropPercent().divide(ONE_HUNDRED, 8, RoundingMode.HALF_UP)
+        );
+
         this.currentPositionId = null;
         this.lastBuyTimestamp = 0;
         this.initialPositionValue = null;
@@ -126,10 +148,8 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
         BigDecimal currentPrice = candle.close();
         long currentTimestamp = candle.timestamp();
 
-        // Calculate SMA threshold: SMA - X%
-        BigDecimal smaThreshold = currentSMA.multiply(
-            BigDecimal.ONE.subtract(config.getSmaDeviationPercent().divide(new BigDecimal("100"), 8, RoundingMode.HALF_UP))
-        );
+        // Calculate SMA threshold: SMA - X% (using cached multiplier)
+        BigDecimal smaThreshold = currentSMA.multiply(smaDeviationMultiplier);
 
         log.debug("Price: {} | SMA: {} | Threshold (SMA-{}%): {} | Below: {}",
             currentPrice, currentSMA, config.getSmaDeviationPercent(), smaThreshold,
@@ -157,9 +177,7 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
 
         // Price drop restriction: only buy if price dropped enough from last buy
         if (lastBuyPrice != null) {
-            BigDecimal minPriceThreshold = lastBuyPrice.multiply(
-                BigDecimal.ONE.subtract(config.getMinPriceDropPercent().divide(new BigDecimal("100"), 8, RoundingMode.HALF_UP))
-            );
+            BigDecimal minPriceThreshold = lastBuyPrice.multiply(minPriceDropMultiplier);
             if (currentPrice.compareTo(minPriceThreshold) >= 0) {
                 log.debug("Price drop restriction: price {} not low enough (need < {} = last buy {} - {}%)",
                     currentPrice, minPriceThreshold, lastBuyPrice, config.getMinPriceDropPercent());
@@ -202,9 +220,7 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
         }
 
         // Check Take Profit: price >= entry + Z%
-        BigDecimal tpPrice = position.getEntryPrice().multiply(
-            BigDecimal.ONE.add(config.getTakeProfitPercent().divide(new BigDecimal("100"), 8, RoundingMode.HALF_UP))
-        );
+        BigDecimal tpPrice = position.getEntryPrice().multiply(takeProfitMultiplier);
 
         if (currentPrice.compareTo(tpPrice) >= 0) {
             log.info("TP triggered: price {} >= TP price {} (entry + {}%)",
@@ -214,9 +230,7 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
 
         // Check AGGRESSIVE DCA: if price dropped significantly, bypass cooldown
         if (lastBuyPrice != null) {
-            BigDecimal aggressiveDcaThreshold = lastBuyPrice.multiply(
-                BigDecimal.ONE.subtract(config.getAggressiveDcaDropPercent().divide(new BigDecimal("100"), 8, RoundingMode.HALF_UP))
-            );
+            BigDecimal aggressiveDcaThreshold = lastBuyPrice.multiply(aggressiveDcaDropMultiplier);
 
             if (currentPrice.compareTo(aggressiveDcaThreshold) < 0) {
                 log.info("AGGRESSIVE DCA triggered: price {} dropped {}% from last buy {} (threshold: {})",
@@ -252,9 +266,7 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
 
         // Price drop restriction: only buy if price dropped enough from last buy
         if (lastBuyPrice != null) {
-            BigDecimal minPriceThreshold = lastBuyPrice.multiply(
-                BigDecimal.ONE.subtract(config.getMinPriceDropPercent().divide(new BigDecimal("100"), 8, RoundingMode.HALF_UP))
-            );
+            BigDecimal minPriceThreshold = lastBuyPrice.multiply(minPriceDropMultiplier);
             if (currentPrice.compareTo(minPriceThreshold) >= 0) {
                 log.debug("DCA blocked by price drop restriction: price {} not low enough (need < {} = last buy {} - {}%)",
                     currentPrice, minPriceThreshold, lastBuyPrice, config.getMinPriceDropPercent());
@@ -403,18 +415,13 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
             return null;
         }
 
-        // Get last N candles
-        int startIndex = candleHistory.size() - period;
-        List<Candle> relevantCandles = candleHistory.subList(startIndex, candleHistory.size());
-
-        // Calculate sum of closing prices
-        BigDecimal sum = BigDecimal.ZERO;
-        for (Candle c : relevantCandles) {
-            sum = sum.add(c.close());
-        }
+        // Calculate sum of last N candles using stream (works with Deque)
+        BigDecimal sum = candleHistory.stream()
+            .skip(Math.max(0, candleHistory.size() - period))
+            .map(Candle::close)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         // Calculate average
-        BigDecimal sma = sum.divide(new BigDecimal(period), 8, RoundingMode.HALF_UP);
-        return sma;
+        return sum.divide(new BigDecimal(period), 8, RoundingMode.HALF_UP);
     }
 }
