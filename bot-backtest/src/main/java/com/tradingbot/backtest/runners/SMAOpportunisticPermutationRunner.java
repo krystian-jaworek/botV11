@@ -5,6 +5,7 @@ import com.tradingbot.algorithms.smaopportunistic.SMAOpportunisticConfig;
 import com.tradingbot.backtest.data.CandleFileReader;
 import com.tradingbot.backtest.permutation.*;
 import com.tradingbot.core.models.Candle;
+import com.tradingbot.core.models.TradingPair;
 import com.tradingbot.persistence.config.MongoConfig;
 import com.tradingbot.persistence.repositories.DynamicSimulationResultRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -19,41 +20,50 @@ import java.util.List;
  *
  * Runs simulations with different SMA period values using Virtual Threads.
  *
- * Usage: [candle-file] [save-to-mongodb]
+ * Configuration:
+ * - Trading pair is configured via TRADING_PAIR constant
+ * - The trading pair determines:
+ *   - Candle data file to use (automatically resolved from resources)
+ *   - Price precision for orders
+ *   - Quantity precision for orders
+ *
+ * Usage: [save-to-mongodb]
  *
  * Examples:
  *   (no arguments)
- *     → Uses default: BTCUSDT-1-365.txt, MongoDB enabled (default)
+ *     → Uses configured TRADING_PAIR, MongoDB enabled (default)
  *
- *   ETHUSDT
- *     → Uses ETHUSDT-1-365.txt, MongoDB enabled (default)
+ *   false
+ *     → Uses configured TRADING_PAIR, MongoDB disabled
  *
- *   BTCUSDT-5-90.txt
- *     → Uses custom file, MongoDB enabled (default)
- *
- *   BTCUSDT false
- *     → Uses BTCUSDT-1-365.txt, MongoDB disabled
- *
- * Note: MongoDB persistence is ENABLED by default. Use 'false' as second argument to disable.
- *
- * SMA parameter range (default):
- * - SMA period: 600-2040 (step 60) = 25 values
- * Total: 25 simulations
+ * Note: MongoDB persistence is ENABLED by default. Use 'false' as argument to disable.
  */
 @Slf4j
 public class SMAOpportunisticPermutationRunner {
 
+    /**
+     * Trading pair configuration.
+     * Change this to use different trading pair and precision settings.
+     */
+    private static final TradingPair TRADING_PAIR = TradingPair.BTCUSDT;
+
     private static final BigDecimal INITIAL_CAPITAL = new BigDecimal("10000");
-    private static final String DEFAULT_CANDLE_FILE = "BTCUSDT-1-365.txt";
+    private static final String CANDLE_FILE_PATTERN = "%s-1-365.txt";  // Pattern: {PAIR}-1-365.txt
 
     public static void main(String[] args) {
-        String candleFileName = resolveCandleFileName(args);
+        // Resolve candle file from configured trading pair
+        String candleFileName = String.format(CANDLE_FILE_PATTERN, TRADING_PAIR.getSymbol());
 
         // MongoDB persistence enabled by default
         boolean saveToMongo = true;
-        if (args.length > 1) {
-            saveToMongo = Boolean.parseBoolean(args[1]);
+        if (args.length > 0) {
+            saveToMongo = Boolean.parseBoolean(args[0]);
         }
+
+        log.info("=== SMA Opportunistic Permutation Runner ===");
+        log.info("Trading Pair: {}", TRADING_PAIR.getSymbol());
+        log.info("Price Precision: {} decimals", TRADING_PAIR.getPricePrecision());
+        log.info("Quantity Precision: {} decimals", TRADING_PAIR.getQuantityPrecision());
 
         try {
             runPermutations(candleFileName, saveToMongo);
@@ -63,28 +73,6 @@ public class SMAOpportunisticPermutationRunner {
             e.printStackTrace();
             System.exit(1);
         }
-    }
-
-    /**
-     * Resolves the candle file name based on command line arguments.
-     */
-    private static String resolveCandleFileName(String[] args) {
-        if (args.length == 0) {
-            log.info("No arguments provided, using default: {}", DEFAULT_CANDLE_FILE);
-            return DEFAULT_CANDLE_FILE;
-        }
-
-        String input = args[0];
-
-        // If ends with .txt, use as is
-        if (input.endsWith(".txt")) {
-            return input;
-        }
-
-        // Otherwise, it's a trading pair - append -1-365.txt
-        String fileName = input + "-1-365.txt";
-        log.info("Trading pair provided, using: {}", fileName);
-        return fileName;
     }
 
     private static void runPermutations(String candleFileName, boolean saveToMongo) throws Exception {

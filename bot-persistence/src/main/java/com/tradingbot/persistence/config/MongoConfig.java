@@ -10,7 +10,10 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.mongodb.config.AbstractMongoClientConfiguration;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.convert.MongoCustomConversions;
 import org.springframework.data.mongodb.repository.config.EnableMongoRepositories;
+
+import java.util.Arrays;
 
 /**
  * MongoDB configuration for both backtest and production systems.
@@ -45,5 +48,19 @@ public class MongoConfig extends AbstractMongoClientConfiguration {
     @Bean
     public MongoTemplate mongoTemplate() {
         return new MongoTemplate(mongoClient(), getDatabaseName());
+    }
+
+    /**
+     * Configure custom converters for BigDecimal <-> Decimal128 mapping.
+     * This ensures BigDecimal values are stored as numeric types in MongoDB
+     * instead of strings, allowing proper numeric queries and aggregations.
+     */
+    @Bean
+    @Override
+    public MongoCustomConversions customConversions() {
+        return new MongoCustomConversions(Arrays.asList(
+            new BigDecimalToDecimal128Converter(),
+            new Decimal128ToBigDecimalConverter()
+        ));
     }
 }
