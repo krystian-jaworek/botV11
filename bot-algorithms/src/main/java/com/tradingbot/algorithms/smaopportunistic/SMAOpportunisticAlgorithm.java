@@ -39,6 +39,7 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
     private String currentPositionId;
     private long lastBuyTimestamp;
     private BigDecimal initialPositionValue;  // USD value of first position (for consistent DCA sizing)
+    private BigDecimal lastBuyPrice;  // Last buy price (resets after TP)
 
     public SMAOpportunisticAlgorithm(SMAOpportunisticConfig config) {
         this.config = config;
@@ -47,6 +48,7 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
         this.currentPositionId = null;
         this.lastBuyTimestamp = 0;
         this.initialPositionValue = null;
+        this.lastBuyPrice = null;
     }
 
     @Override
@@ -63,12 +65,13 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
     public void initialize(BigDecimal initialPrice) {
         log.info("Initializing {} algorithm", getName());
         log.info("Config: {}", config.getConfigId());
-        log.info("Parameters: SMA={}, Size={}%, Deviation={}%, TP={}%, Cooldown={}h",
+        log.info("Parameters: SMA={}, Size={}%, Deviation={}%, TP={}%, Cooldown={}h, MinDrop={}%",
             config.getSmaPeriod(),
             config.getPositionSizePercent(),
             config.getSmaDeviationPercent(),
             config.getTakeProfitPercent(),
-            config.getCooldownHours()
+            config.getCooldownHours(),
+            config.getMinPriceDropPercent()
         );
     }
 
@@ -97,6 +100,7 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
         );
         currentPositionId = null;
         initialPositionValue = null;  // Reset for next position
+        lastBuyPrice = null;  // Reset price restriction after TP
         // Note: We DON'T reset lastBuyTimestamp here - cooldown continues
     }
 
@@ -146,6 +150,18 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
         // Entry condition: price < SMA - X%
         if (currentPrice.compareTo(smaThreshold) >= 0) {
             return TradingDecision.Hold.INSTANCE;
+        }
+
+        // Price drop restriction: only buy if price dropped enough from last buy
+        if (lastBuyPrice != null) {
+            BigDecimal minPriceThreshold = lastBuyPrice.multiply(
+                BigDecimal.ONE.subtract(config.getMinPriceDropPercent().divide(new BigDecimal("100"), 8, RoundingMode.HALF_UP))
+            );
+            if (currentPrice.compareTo(minPriceThreshold) >= 0) {
+                log.debug("Price drop restriction: price {} not low enough (need < {} = last buy {} - {}%)",
+                    currentPrice, minPriceThreshold, lastBuyPrice, config.getMinPriceDropPercent());
+                return TradingDecision.Hold.INSTANCE;
+            }
         }
 
         log.info("Entry signal: price {} < threshold {} (SMA - {}%)",
@@ -209,6 +225,18 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
             return TradingDecision.Hold.INSTANCE;
         }
 
+        // Price drop restriction: only buy if price dropped enough from last buy
+        if (lastBuyPrice != null) {
+            BigDecimal minPriceThreshold = lastBuyPrice.multiply(
+                BigDecimal.ONE.subtract(config.getMinPriceDropPercent().divide(new BigDecimal("100"), 8, RoundingMode.HALF_UP))
+            );
+            if (currentPrice.compareTo(minPriceThreshold) >= 0) {
+                log.debug("DCA blocked by price drop restriction: price {} not low enough (need < {} = last buy {} - {}%)",
+                    currentPrice, minPriceThreshold, lastBuyPrice, config.getMinPriceDropPercent());
+                return TradingDecision.Hold.INSTANCE;
+            }
+        }
+
         // DCA: add to position
         log.info("DCA signal: cooldown passed ({} hours), price {} < threshold {}",
             timeSinceLastBuy / 3600000, currentPrice, smaThreshold);
@@ -268,6 +296,10 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
         }
 
         log.info("Opening position: quantity={}, price={}, value=${}", quantity, price, orderValue);
+
+        // Update last buy price for price drop restriction
+        lastBuyPrice = price;
+
         return new TradingDecision.OpenPosition(OrderSide.LONG, quantity, price);
     }
 
@@ -315,6 +347,9 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
 
         // Update lastBuyTimestamp when we successfully create DCA order
         lastBuyTimestamp = timestamp;
+
+        // Update last buy price for price drop restriction
+        lastBuyPrice = price;
 
         return new TradingDecision.IncreasePosition(position.getId(), quantity, price);
     }

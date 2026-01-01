@@ -15,6 +15,7 @@ import java.util.List;
  * - X: SMA deviation %
  * - Z: Take profit %
  * - B: Cooldown hours
+ * - Min price drop % (from last buy)
  */
 public class SMAOpportunisticParameterPermutation {
 
@@ -23,19 +24,22 @@ public class SMAOpportunisticParameterPermutation {
     private final List<BigDecimal> smaDeviationValues;      // X
     private final List<BigDecimal> takeProfitValues;        // Z
     private final List<Integer> cooldownHoursValues;        // B
+    private final List<BigDecimal> minPriceDropValues;      // Min price drop %
 
     public SMAOpportunisticParameterPermutation(
         List<Integer> smaPeriodValues,
         List<BigDecimal> positionSizeValues,
         List<BigDecimal> smaDeviationValues,
         List<BigDecimal> takeProfitValues,
-        List<Integer> cooldownHoursValues
+        List<Integer> cooldownHoursValues,
+        List<BigDecimal> minPriceDropValues
     ) {
         this.smaPeriodValues = smaPeriodValues;
         this.positionSizeValues = positionSizeValues;
         this.smaDeviationValues = smaDeviationValues;
         this.takeProfitValues = takeProfitValues;
         this.cooldownHoursValues = cooldownHoursValues;
+        this.minPriceDropValues = minPriceDropValues;
     }
 
     /**
@@ -66,9 +70,14 @@ public class SMAOpportunisticParameterPermutation {
                 new BigDecimal("3.0"),
                 new BigDecimal("4.0")                        // 3 values
             ),
-            List.of(12, 24, 48)                              // B: Cooldown (3 values)
+            List.of(12, 24, 48),                             // B: Cooldown (3 values)
+            List.of(                                         // Min price drop
+                new BigDecimal("0.5"),
+                new BigDecimal("1.0"),
+                new BigDecimal("1.5")                        // 3 values
+            )
         );
-        // Total: 7 * 3 * 3 * 3 * 3 = 567 configurations
+        // Total: 7 * 3 * 3 * 3 * 3 * 3 = 1701 configurations
     }
 
     /**
@@ -81,7 +90,8 @@ public class SMAOpportunisticParameterPermutation {
             List.of(new BigDecimal("5.0")),                 // Y: 5% position size
             List.of(new BigDecimal("2.0")),                 // X: 2% deviation
             List.of(new BigDecimal("3.0")),                 // Z: 3% TP
-            List.of(24)                                      // B: 24h cooldown
+            List.of(24),                                     // B: 24h cooldown
+            List.of(new BigDecimal("1.0"))                  // Min price drop: 1%
         );
         // Total: 1 configuration (for testing)
     }
@@ -97,14 +107,17 @@ public class SMAOpportunisticParameterPermutation {
                 for (BigDecimal smaDeviation : smaDeviationValues) {
                     for (BigDecimal takeProfit : takeProfitValues) {
                         for (Integer cooldown : cooldownHoursValues) {
-                            SMAOpportunisticConfig config = SMAOpportunisticConfig.builder()
-                                .smaPeriod(smaPeriod)
-                                .positionSizePercent(positionSize)
-                                .smaDeviationPercent(smaDeviation)
-                                .takeProfitPercent(takeProfit)
-                                .cooldownHours(cooldown)
-                                .build();
-                            configs.add(config);
+                            for (BigDecimal minPriceDrop : minPriceDropValues) {
+                                SMAOpportunisticConfig config = SMAOpportunisticConfig.builder()
+                                    .smaPeriod(smaPeriod)
+                                    .positionSizePercent(positionSize)
+                                    .smaDeviationPercent(smaDeviation)
+                                    .takeProfitPercent(takeProfit)
+                                    .cooldownHours(cooldown)
+                                    .minPriceDropPercent(minPriceDrop)
+                                    .build();
+                                configs.add(config);
+                            }
                         }
                     }
                 }
@@ -122,6 +135,7 @@ public class SMAOpportunisticParameterPermutation {
             * positionSizeValues.size()
             * smaDeviationValues.size()
             * takeProfitValues.size()
-            * cooldownHoursValues.size();
+            * cooldownHoursValues.size()
+            * minPriceDropValues.size();
     }
 }

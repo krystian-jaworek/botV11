@@ -49,14 +49,22 @@ public class SMAOpportunisticConfig implements AlgorithmConfig {
      */
     int cooldownHours;
 
+    /**
+     * Minimum price drop % from last buy to allow new purchase
+     * Example: 1.0 = only buy if price is 1% lower than last buy price
+     * This resets after each TP (take profit)
+     */
+    BigDecimal minPriceDropPercent;
+
     @Override
     public String getConfigId() {
-        return String.format("SMAOpp[SMA=%d,Size=%.1f%%,Dev=%.1f%%,TP=%.1f%%,Cool=%dh]",
+        return String.format("SMAOpp[SMA=%d,Size=%.1f%%,Dev=%.1f%%,TP=%.1f%%,Cool=%dh,Drop=%.1f%%]",
             smaPeriod,
             positionSizePercent,
             smaDeviationPercent,
             takeProfitPercent,
-            cooldownHours
+            cooldownHours,
+            minPriceDropPercent
         );
     }
 
@@ -79,6 +87,9 @@ public class SMAOpportunisticConfig implements AlgorithmConfig {
         if (cooldownHours < 0) {
             throw new IllegalArgumentException("Cooldown hours must be >= 0");
         }
+        if (minPriceDropPercent.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("Min price drop percent must be >= 0");
+        }
     }
 
     /**
@@ -90,6 +101,7 @@ public class SMAOpportunisticConfig implements AlgorithmConfig {
      * - X: SMA deviation: 2% (buy when price < SMA - 2%)
      * - Z: Take profit: 3%
      * - B: Cooldown: 24 hours
+     * - Min price drop: 1% (from last buy)
      */
     public static SMAOpportunisticConfig defaultConfig() {
         return SMAOpportunisticConfig.builder()
@@ -98,6 +110,7 @@ public class SMAOpportunisticConfig implements AlgorithmConfig {
             .smaDeviationPercent(new BigDecimal("2.0"))
             .takeProfitPercent(new BigDecimal("3.0"))
             .cooldownHours(24)
+            .minPriceDropPercent(new BigDecimal("1.0"))
             .build();
     }
 }
