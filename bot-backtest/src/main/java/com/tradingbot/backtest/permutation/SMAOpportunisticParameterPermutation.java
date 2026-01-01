@@ -133,18 +133,18 @@ public class SMAOpportunisticParameterPermutation {
      * Local search optimization around known good parameters
      *
      * Center values (from best config):
-     * - SMA: 840, Size: 7%, Deviation: 2.5%, TP: 3%
-     * - Cooldown: 12h, MinDrop: 1%, AggrDCA: 3%
+     * - SMA: 900, Size: 7.5%, Deviation: 2.5%, TP: 3%
+     * - Cooldown: 12h, MinDrop: 1%, AggrDCA: 2.5%
      */
     public static SMAOpportunisticParameterPermutation finetunePermutation() {
         return new SMAOpportunisticParameterPermutation(
-            rangeInt(720, 960, 60),          // SMA: 840 ± 120, step 60 (5 values: 720, 780, 840, 900, 960)
-            range(6.5, 7.5, 0.5),            // Y: 7.0 ± 0.5, step 0.5 (3 values: 6.5, 7.0, 7.5)
+            rangeInt(780, 1020, 60),         // SMA: 900 ± 120, step 60 (5 values: 780, 840, 900, 960, 1020)
+            range(7.0, 8.0, 0.5),            // Y: 7.5 ± 0.5, step 0.5 (3 values: 7.0, 7.5, 8.0)
             range(2.25, 2.75, 0.25),         // X: 2.5 ± 0.25, step 0.25 (3 values: 2.25, 2.5, 2.75)
             range(2.75, 3.25, 0.25),         // Z: 3.0 ± 0.25, step 0.25 (3 values: 2.75, 3.0, 3.25)
             List.of(12),                      // B: Keep optimal 12h (1 value)
             range(0.75, 1.25, 0.25),         // MinDrop: 1.0 ± 0.25, step 0.25 (3 values: 0.75, 1.0, 1.25)
-            range(2.5, 3.5, 0.5)             // AggrDCA: 3.0 ± 0.5, step 0.5 (3 values: 2.5, 3.0, 3.5)
+            range(2.0, 3.0, 0.5)             // AggrDCA: 2.5 ± 0.5, step 0.5 (3 values: 2.0, 2.5, 3.0)
         );
         // Total: 5 * 3 * 3 * 3 * 1 * 3 * 3 = 1215 configurations
     }

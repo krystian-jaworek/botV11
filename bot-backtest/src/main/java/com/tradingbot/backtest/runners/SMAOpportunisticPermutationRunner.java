@@ -114,15 +114,15 @@ public class SMAOpportunisticPermutationRunner {
 
         log.info("Generated {} configurations", configurations.size());
         log.info("FINE-TUNE MODE: Local search around best found configuration");
-        log.info("Center values: SMA=840, Size=7%, Dev=2.5%, TP=3%, Cool=12h, MinDrop=1%, AggrDCA=3%");
+        log.info("Center values: SMA=900, Size=7.5%, Dev=2.5%, TP=3%, Cool=12h, MinDrop=1%, AggrDCA=2.5%");
         log.info("Parameter ranges:");
-        log.info("  SMA period: 720-960 (step 60) - 5 values");
-        log.info("  Position size (Y): 6.5%-7.5% (step 0.5) - 3 values");
+        log.info("  SMA period: 780-1020 (step 60) - 5 values");
+        log.info("  Position size (Y): 7.0%-8.0% (step 0.5) - 3 values");
         log.info("  SMA deviation (X): 2.25%-2.75% (step 0.25) - 3 values");
         log.info("  Take profit (Z): 2.75%-3.25% (step 0.25) - 3 values");
         log.info("  Cooldown (B): 12h (fixed) - 1 value");
         log.info("  Min price drop: 0.75%-1.25% (step 0.25) - 3 values");
-        log.info("  Aggressive DCA: 2.5%-3.5% (step 0.5) - 3 values");
+        log.info("  Aggressive DCA: 2.0%-3.0% (step 0.5) - 3 values");
         log.info("Early stopping enabled: loss > 50% after 50% of simulation OR no trades after 25%");
 
         // Create simulation tasks
