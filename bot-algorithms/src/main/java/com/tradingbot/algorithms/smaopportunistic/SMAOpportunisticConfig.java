@@ -8,7 +8,7 @@ import java.math.BigDecimal;
 
 /**
  * Configuration for SMA Opportunistic algorithm.
- *
+ * <p>
  * SMA-based DCA strategy with cooldown period:
  * - Buy when price < SMA - X%
  * - Position size: Y% of portfolio
@@ -104,7 +104,7 @@ public class SMAOpportunisticConfig implements AlgorithmConfig {
 
     /**
      * Create default configuration for single run
-     *
+     * <p>
      * Parameters:
      * - SMA period: 1440 (24h with 1m candles)
      * - Y: Position size: 5% of portfolio
