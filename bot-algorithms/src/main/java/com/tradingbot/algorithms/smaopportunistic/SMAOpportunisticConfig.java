@@ -56,15 +56,22 @@ public class SMAOpportunisticConfig implements AlgorithmConfig {
      */
     BigDecimal minPriceDropPercent;
 
+    /**
+     * Aggressive DCA trigger: price drop % from last buy that bypasses cooldown
+     * Example: 5.0 = if price drops 5% from last buy, immediately DCA and reset cooldown
+     */
+    BigDecimal aggressiveDcaDropPercent;
+
     @Override
     public String getConfigId() {
-        return String.format("SMAOpp[SMA=%d,Size=%.1f%%,Dev=%.1f%%,TP=%.1f%%,Cool=%dh,Drop=%.1f%%]",
+        return String.format("SMAOpp[SMA=%d,Size=%.1f%%,Dev=%.1f%%,TP=%.1f%%,Cool=%dh,Drop=%.1f%%,Aggr=%.1f%%]",
             smaPeriod,
             positionSizePercent,
             smaDeviationPercent,
             takeProfitPercent,
             cooldownHours,
-            minPriceDropPercent
+            minPriceDropPercent,
+            aggressiveDcaDropPercent
         );
     }
 
@@ -90,6 +97,9 @@ public class SMAOpportunisticConfig implements AlgorithmConfig {
         if (minPriceDropPercent.compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("Min price drop percent must be >= 0");
         }
+        if (aggressiveDcaDropPercent.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("Aggressive DCA drop percent must be >= 0");
+        }
     }
 
     /**
@@ -102,6 +112,7 @@ public class SMAOpportunisticConfig implements AlgorithmConfig {
      * - Z: Take profit: 3%
      * - B: Cooldown: 24 hours
      * - Min price drop: 1% (from last buy)
+     * - Aggressive DCA: 5% (bypass cooldown if price drops 5%)
      */
     public static SMAOpportunisticConfig defaultConfig() {
         return SMAOpportunisticConfig.builder()
@@ -111,6 +122,7 @@ public class SMAOpportunisticConfig implements AlgorithmConfig {
             .takeProfitPercent(new BigDecimal("3.0"))
             .cooldownHours(24)
             .minPriceDropPercent(new BigDecimal("1.0"))
+            .aggressiveDcaDropPercent(new BigDecimal("5.0"))
             .build();
     }
 }

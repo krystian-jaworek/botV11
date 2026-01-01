@@ -19,12 +19,14 @@ import java.util.List;
 /**
  * SMA Opportunistic Algorithm
  *
- * SMA-based DCA strategy with cooldown:
+ * SMA-based DCA strategy with cooldown and aggressive DCA:
  * 1. Buy when price < SMA - X%
  * 2. Position size: Y% of portfolio
  * 3. Take profit at entry + Z%
  * 4. Cooldown B hours between buys
- * 5. DCA: if cooldown passed and still below SMA - X%, add to position
+ * 5. AGGRESSIVE DCA: if price drops significantly (configurable %), bypass cooldown
+ * 6. DCA: if cooldown passed and still below SMA - X%, add to position
+ * 7. Min price drop restriction: only buy if price dropped enough from last buy
  */
 @Slf4j
 public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunisticConfig> {
@@ -65,13 +67,14 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
     public void initialize(BigDecimal initialPrice) {
         log.info("Initializing {} algorithm", getName());
         log.info("Config: {}", config.getConfigId());
-        log.info("Parameters: SMA={}, Size={}%, Deviation={}%, TP={}%, Cooldown={}h, MinDrop={}%",
+        log.info("Parameters: SMA={}, Size={}%, Deviation={}%, TP={}%, Cooldown={}h, MinDrop={}%, AggrDCA={}%",
             config.getSmaPeriod(),
             config.getPositionSizePercent(),
             config.getSmaDeviationPercent(),
             config.getTakeProfitPercent(),
             config.getCooldownHours(),
-            config.getMinPriceDropPercent()
+            config.getMinPriceDropPercent(),
+            config.getAggressiveDcaDropPercent()
         );
     }
 
@@ -207,6 +210,28 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
             log.info("TP triggered: price {} >= TP price {} (entry + {}%)",
                 currentPrice, tpPrice, config.getTakeProfitPercent());
             return new TradingDecision.ClosePosition(currentPositionId, currentPrice);
+        }
+
+        // Check AGGRESSIVE DCA: if price dropped significantly, bypass cooldown
+        if (lastBuyPrice != null) {
+            BigDecimal aggressiveDcaThreshold = lastBuyPrice.multiply(
+                BigDecimal.ONE.subtract(config.getAggressiveDcaDropPercent().divide(new BigDecimal("100"), 8, RoundingMode.HALF_UP))
+            );
+
+            if (currentPrice.compareTo(aggressiveDcaThreshold) < 0) {
+                log.info("AGGRESSIVE DCA triggered: price {} dropped {}% from last buy {} (threshold: {})",
+                    currentPrice, config.getAggressiveDcaDropPercent(), lastBuyPrice, aggressiveDcaThreshold);
+
+                // Execute DCA immediately, bypassing cooldown
+                BigDecimal dcaValue = initialPositionValue;
+                TradingDecision decision = validateAndCreateIncreaseOrder(
+                    position, dcaValue, currentPrice, portfolio.getCashBalance(), currentTimestamp
+                );
+                if (decision != null) {
+                    return decision;
+                }
+                // If validation failed, fall through to normal logic
+            }
         }
 
         // Check DCA conditions:

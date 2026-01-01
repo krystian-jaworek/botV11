@@ -116,6 +116,7 @@ public class SMAOpportunisticPermutationRunner {
         log.info("  Take profit (Z): 2%, 3%, 4%");
         log.info("  Cooldown (B): 12h, 24h, 48h");
         log.info("  Min price drop: 0.5%, 1%, 1.5%");
+        log.info("  Aggressive DCA: 3%, 5%, 7%");
 
         // Create simulation tasks
         List<SimulationTask> tasks = new ArrayList<>();
