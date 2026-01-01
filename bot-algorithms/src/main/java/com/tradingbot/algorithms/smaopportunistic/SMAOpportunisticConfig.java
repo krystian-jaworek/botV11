@@ -116,13 +116,13 @@ public class SMAOpportunisticConfig implements AlgorithmConfig {
      */
     public static SMAOpportunisticConfig defaultConfig() {
         return SMAOpportunisticConfig.builder()
-            .smaPeriod(1440)
-            .positionSizePercent(new BigDecimal("5.0"))
-            .smaDeviationPercent(new BigDecimal("2.0"))
+            .smaPeriod(840)
+            .positionSizePercent(new BigDecimal("7.0"))
+            .smaDeviationPercent(new BigDecimal("2.5"))
             .takeProfitPercent(new BigDecimal("3.0"))
-            .cooldownHours(24)
+            .cooldownHours(12)
             .minPriceDropPercent(new BigDecimal("1.0"))
-            .aggressiveDcaDropPercent(new BigDecimal("5.0"))
+            .aggressiveDcaDropPercent(new BigDecimal("3.0"))
             .build();
     }
 }
