@@ -95,9 +95,9 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
 
     @Override
     public void initialize(BigDecimal initialPrice) {
-        log.info("Initializing {} algorithm", getName());
-        log.info("Config: {}", config.getConfigId());
-        log.info("Parameters: SMA={}, Size={}%, Deviation={}%, TP={}%, Cooldown={}h, MinDrop={}%, AggrDCA={}%",
+        log.debug("Initializing {} algorithm", getName());
+        log.debug("Config: {}", config.getConfigId());
+        log.debug("Parameters: SMA={}, Size={}%, Deviation={}%, TP={}%, Cooldown={}h, MinDrop={}%, AggrDCA={}%",
             config.getSmaPeriod(),
             config.getPositionSizePercent(),
             config.getSmaDeviationPercent(),
@@ -115,7 +115,7 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
         if (currentPositionId == null) {
             currentPositionId = position.getId();
             lastBuyTimestamp = position.getOpenTimestamp();
-            log.info("Position opened: {} | Entry: {} | Quantity: {}",
+            log.debug("Position opened: {} | Entry: {} | Quantity: {}",
                 position.getId(), position.getEntryPrice(), position.getQuantity());
         } else {
             log.debug("Position increased: {} | New Entry: {} | Total Quantity: {}",
@@ -125,7 +125,7 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
 
     @Override
     public void onPositionClosed(ClosedPosition closedPosition) {
-        log.info("Position closed: {} | Profit: {}% (${}) | Duration: {} candles",
+        log.debug("Position closed: {} | Profit: {}% (${}) | Duration: {} candles",
             closedPosition.getId(),
             closedPosition.getRealizedPnLPercentage(),
             closedPosition.getRealizedPnL(),
@@ -201,7 +201,7 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
             }
         }
 
-        log.info("Entry signal: price {} < threshold {} (SMA - {}%)",
+        log.debug("Entry signal: price {} < threshold {} (SMA - {}%)",
             currentPrice, smaThreshold, config.getSmaDeviationPercent());
 
         // Calculate position size: Y% of portfolio (at time of FIRST entry)
@@ -239,7 +239,7 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
         BigDecimal tpPrice = position.getEntryPrice().multiply(takeProfitMultiplier);
 
         if (currentPrice.compareTo(tpPrice) >= 0) {
-            log.info("TP triggered: price {} >= TP price {} (entry + {}%)",
+            log.debug("TP triggered: price {} >= TP price {} (entry + {}%)",
                 currentPrice, tpPrice, config.getTakeProfitPercent());
             return new TradingDecision.ClosePosition(currentPositionId, currentPrice);
         }
@@ -249,7 +249,7 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
             BigDecimal aggressiveDcaThreshold = lastBuyPrice.multiply(aggressiveDcaDropMultiplier);
 
             if (currentPrice.compareTo(aggressiveDcaThreshold) < 0) {
-                log.info("AGGRESSIVE DCA triggered: price {} dropped {}% from last buy {} (threshold: {})",
+                log.debug("AGGRESSIVE DCA triggered: price {} dropped {}% from last buy {} (threshold: {})",
                     currentPrice, config.getAggressiveDcaDropPercent(), lastBuyPrice, aggressiveDcaThreshold);
 
                 // Execute DCA immediately, bypassing cooldown
@@ -291,7 +291,7 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
         }
 
         // DCA: add to position
-        log.info("DCA signal: cooldown passed ({} hours), price {} < threshold {}",
+        log.debug("DCA signal: cooldown passed ({} hours), price {} < threshold {}",
             timeSinceLastBuy / 3600000, currentPrice, smaThreshold);
 
         // Use SAME position value as initial entry (not current cash %)
@@ -348,7 +348,7 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
             return null;
         }
 
-        log.info("Opening position: quantity={}, price={}, value=${}", quantity, price, orderValue);
+        log.debug("Opening position: quantity={}, price={}, value=${}", quantity, price, orderValue);
 
         // Update last buy price for price drop restriction
         lastBuyPrice = price;
@@ -395,7 +395,7 @@ public class SMAOpportunisticAlgorithm implements TradingAlgorithm<SMAOpportunis
             return null;
         }
 
-        log.info("Increasing position {}: additional quantity={}, price={}, value=${}",
+        log.debug("Increasing position {}: additional quantity={}, price={}, value=${}",
             position.getId(), quantity, price, orderValue);
 
         // Update lastBuyTimestamp when we successfully create DCA order
