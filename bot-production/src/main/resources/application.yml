@@ -5,6 +5,13 @@ spring:
 server:
   port: 8080
 
+# Application Security & Encryption
+app:
+  security:
+    api-key: ${API_KEY:changeme}  # Set via environment variable
+  encryption:
+    secret-key: ${ENCRYPTION_KEY:changeme-16chars}  # Must be exactly 16 characters for AES-128
+
 # MongoDB configuration
 mongodb:
   connection-string: mongodb://admin:password@localhost:27017/
