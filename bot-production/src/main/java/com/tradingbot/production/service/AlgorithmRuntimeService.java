@@ -1,8 +1,7 @@
 package com.tradingbot.production.service;
 
 import com.tradingbot.algorithms.smaopportunistic.SMAOpportunisticConfig;
-import com.tradingbot.core.executor.OrderExecutor;
-import com.tradingbot.core.executor.PortfolioManager;
+import com.tradingbot.core.algorithms.TradingDecision;
 import com.tradingbot.core.models.*;
 import com.tradingbot.production.algorithm.StatefulAlgorithm;
 import com.tradingbot.production.algorithm.StatefulSMAOpportunistic;
@@ -84,7 +83,7 @@ public class AlgorithmRuntimeService {
             log.info("[{}] Decision: {}", instance.getName(), decision.getClass().getSimpleName());
 
             // 7. Execute trading decision
-            FilledOrder filledOrder = null;
+            LiveFilledOrder filledOrder = null;
             if (!(decision instanceof TradingDecision.Hold)) {
                 filledOrder = executeDecision(decision, instance, candle.close(), apiKey, apiSecret);
             }
@@ -117,7 +116,7 @@ public class AlgorithmRuntimeService {
     /**
      * Execute trading decision (open/increase/close position)
      */
-    private FilledOrder executeDecision(
+    private LiveFilledOrder executeDecision(
         TradingDecision decision,
         AlgorithmInstanceDocument instance,
         BigDecimal currentPrice,
@@ -131,7 +130,7 @@ public class AlgorithmRuntimeService {
             // Calculate quantity from value
             BigDecimal quantity = open.value().divide(currentPrice, pair.getQuantityPrecision(), java.math.RoundingMode.DOWN);
 
-            FilledOrder order = bybitClient.placeMarketOrder(pair, OrderSide.BUY, quantity, apiKey, apiSecret);
+            LiveFilledOrder order = bybitClient.placeMarketOrder(pair, OrderSide.BUY, quantity, apiKey, apiSecret);
             log.info("[{}] Position opened: {} {} at ~{}", instance.getName(), quantity, pair.getSymbol(), currentPrice);
 
             return order;
@@ -139,7 +138,7 @@ public class AlgorithmRuntimeService {
         } else if (decision instanceof TradingDecision.IncreasePosition increase) {
             BigDecimal quantity = increase.value().divide(currentPrice, pair.getQuantityPrecision(), java.math.RoundingMode.DOWN);
 
-            FilledOrder order = bybitClient.placeMarketOrder(pair, OrderSide.BUY, quantity, apiKey, apiSecret);
+            LiveFilledOrder order = bybitClient.placeMarketOrder(pair, OrderSide.BUY, quantity, apiKey, apiSecret);
             log.info("[{}] Position increased: {} {} at ~{}", instance.getName(), quantity, pair.getSymbol(), currentPrice);
 
             return order;
@@ -151,7 +150,7 @@ public class AlgorithmRuntimeService {
                 return null;
             }
 
-            FilledOrder order = bybitClient.placeMarketOrder(pair, OrderSide.SELL, position.getQuantity(), apiKey, apiSecret);
+            LiveFilledOrder order = bybitClient.placeMarketOrder(pair, OrderSide.SELL, position.getQuantity(), apiKey, apiSecret);
             log.info("[{}] Position closed: {} {} at ~{}", instance.getName(), position.getQuantity(), pair.getSymbol(), currentPrice);
 
             return order;
@@ -164,15 +163,19 @@ public class AlgorithmRuntimeService {
      * Build portfolio from saved state
      */
     private Portfolio buildPortfolio(AlgorithmState state, BigDecimal currentPrice) {
-        PortfolioManager manager = new PortfolioManager(state.getCashBalance());
+        Portfolio portfolio = new Portfolio(state.getInitialBalance());
+
+        // Set current cash balance (different from initial if trades happened)
+        portfolio.setCashBalance(state.getCashBalance());
 
         Position position = state.getCurrentPosition();
         if (position != null) {
-            // Recreate position in portfolio
-            manager.openPosition(position.getAverageEntryPrice(), position.getQuantity());
+            // Manually add position without deducting cash (already deducted in past)
+            // We need to restore portfolio to exact state
+            portfolio.getOpenPositions().put(position.getId(), position);
         }
 
-        return manager.getPortfolio();
+        return portfolio;
     }
 
     /**
@@ -218,7 +221,7 @@ public class AlgorithmRuntimeService {
         Candle candle,
         TradingDecision decision,
         AlgorithmState stateBefore,
-        FilledOrder filledOrder,
+        LiveFilledOrder filledOrder,
         String error,
         long executionTimeMs
     ) {

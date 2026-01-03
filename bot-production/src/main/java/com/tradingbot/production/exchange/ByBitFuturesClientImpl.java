@@ -3,6 +3,7 @@ package com.tradingbot.production.exchange;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tradingbot.core.models.*;
+import com.tradingbot.production.model.LiveLiveFilledOrder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -133,7 +134,7 @@ public class ByBitFuturesClientImpl implements ByBitFuturesClient {
     }
 
     @Override
-    public FilledOrder placeMarketOrder(
+    public LiveFilledOrder placeMarketOrder(
         TradingPair pair,
         OrderSide side,
         BigDecimal quantity,
@@ -263,7 +264,7 @@ public class ByBitFuturesClientImpl implements ByBitFuturesClient {
     /**
      * Parse order response after placing an order
      */
-    private FilledOrder parseOrderResponse(
+    private LiveFilledOrder parseOrderResponse(
         String response,
         TradingPair pair,
         OrderSide side,
@@ -284,7 +285,7 @@ public class ByBitFuturesClientImpl implements ByBitFuturesClient {
         // Note: For market orders, we need to query order details to get exact fill price
         // For now, return with estimated data (in production, add GET /v5/order/realtime)
 
-        return FilledOrder.builder()
+        return LiveFilledOrder.builder()
             .orderId(orderId)
             .tradingPair(pair.getSymbol())
             .side(side)

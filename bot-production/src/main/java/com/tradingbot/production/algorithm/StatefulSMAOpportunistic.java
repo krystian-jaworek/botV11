@@ -5,7 +5,7 @@ import com.tradingbot.algorithms.smaopportunistic.SMAOpportunisticConfig;
 import com.tradingbot.core.models.Candle;
 import com.tradingbot.core.models.Portfolio;
 import com.tradingbot.core.models.Position;
-import com.tradingbot.core.models.TradingDecision;
+import com.tradingbot.core.algorithms.TradingDecision;
 import com.tradingbot.production.model.AlgorithmState;
 import com.tradingbot.production.model.AlgorithmType;
 import lombok.extern.slf4j.Slf4j;

@@ -1,9 +1,9 @@
 package com.tradingbot.production.exchange;
 
 import com.tradingbot.core.models.Candle;
-import com.tradingbot.core.models.FilledOrder;
 import com.tradingbot.core.models.OrderSide;
 import com.tradingbot.core.models.TradingPair;
+import com.tradingbot.production.model.LiveFilledOrder;
 
 import java.math.BigDecimal;
 
@@ -66,7 +66,7 @@ public interface ByBitFuturesClient {
      * @return Filled order with execution details
      * @throws ByBitApiException if order fails
      */
-    FilledOrder placeMarketOrder(
+    LiveFilledOrder placeMarketOrder(
         TradingPair pair,
         OrderSide side,
         BigDecimal quantity,

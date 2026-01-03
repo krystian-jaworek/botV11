@@ -1,8 +1,7 @@
 package com.tradingbot.production.model;
 
+import com.tradingbot.core.algorithms.TradingDecision;
 import com.tradingbot.core.models.Candle;
-import com.tradingbot.core.models.FilledOrder;
-import com.tradingbot.core.models.TradingDecision;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -59,7 +58,7 @@ public class ExecutionLogDocument {
      * Filled order details (if decision resulted in an order)
      * Null if decision was Hold
      */
-    private FilledOrder filledOrder;
+    private LiveFilledOrder filledOrder;
 
     /**
      * Error message (if execution failed)
