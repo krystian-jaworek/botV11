@@ -3,7 +3,7 @@ package com.tradingbot.production.exchange;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tradingbot.core.models.*;
-import com.tradingbot.production.model.LiveLiveFilledOrder;
+import com.tradingbot.production.model.LiveFilledOrder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
