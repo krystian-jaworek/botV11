@@ -93,7 +93,13 @@ public class AlgorithmRuntimeService {
 
             // Update state with portfolio info
             newState.setCashBalance(portfolio.getCashBalance());
-            newState.setCurrentPosition(portfolio.hasOpenPosition() ? portfolio.getOpenPosition() : null);
+
+            // Get single open position if exists (SMA Opportunistic only has one position at a time)
+            Position currentPosition = null;
+            if (portfolio.getOpenPositionCount() > 0) {
+                currentPosition = portfolio.getOpenPositions().values().iterator().next();
+            }
+            newState.setCurrentPosition(currentPosition);
 
             // 9. Update and save instance
             instance.setState(newState);
@@ -127,18 +133,20 @@ public class AlgorithmRuntimeService {
         TradingPair pair = instance.getTradingPair();
 
         if (decision instanceof TradingDecision.OpenPosition open) {
-            // Calculate quantity from value
-            BigDecimal quantity = open.value().divide(currentPrice, pair.getQuantityPrecision(), java.math.RoundingMode.DOWN);
+            // OpenPosition.quantity is already in base currency (BTC for BTCUSDT)
+            // Use it directly
+            BigDecimal quantity = open.quantity();
 
-            LiveFilledOrder order = bybitClient.placeMarketOrder(pair, OrderSide.BUY, quantity, apiKey, apiSecret);
+            LiveFilledOrder order = bybitClient.placeMarketOrder(pair, OrderSide.LONG, quantity, apiKey, apiSecret);
             log.info("[{}] Position opened: {} {} at ~{}", instance.getName(), quantity, pair.getSymbol(), currentPrice);
 
             return order;
 
         } else if (decision instanceof TradingDecision.IncreasePosition increase) {
-            BigDecimal quantity = increase.value().divide(currentPrice, pair.getQuantityPrecision(), java.math.RoundingMode.DOWN);
+            // IncreasePosition.additionalQuantity is already in base currency
+            BigDecimal quantity = increase.additionalQuantity();
 
-            LiveFilledOrder order = bybitClient.placeMarketOrder(pair, OrderSide.BUY, quantity, apiKey, apiSecret);
+            LiveFilledOrder order = bybitClient.placeMarketOrder(pair, OrderSide.LONG, quantity, apiKey, apiSecret);
             log.info("[{}] Position increased: {} {} at ~{}", instance.getName(), quantity, pair.getSymbol(), currentPrice);
 
             return order;
@@ -150,7 +158,10 @@ public class AlgorithmRuntimeService {
                 return null;
             }
 
-            LiveFilledOrder order = bybitClient.placeMarketOrder(pair, OrderSide.SELL, position.getQuantity(), apiKey, apiSecret);
+            // For closing LONG position, we SELL
+            OrderSide closeSide = position.getSide() == OrderSide.LONG ? OrderSide.SHORT : OrderSide.LONG;
+
+            LiveFilledOrder order = bybitClient.placeMarketOrder(pair, closeSide, position.getQuantity(), apiKey, apiSecret);
             log.info("[{}] Position closed: {} {} at ~{}", instance.getName(), position.getQuantity(), pair.getSymbol(), currentPrice);
 
             return order;
