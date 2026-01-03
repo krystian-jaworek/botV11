@@ -147,6 +147,10 @@ public class TradingScheduler {
             case TradingDecision.Hold hold -> {
                 // No action
             }
+            default -> {
+                // Handle other cases (IncreasePosition, ClosePositionPartial, etc.)
+                log.warn("Unhandled trading decision type: {}", decision.getClass().getSimpleName());
+            }
         }
     }
 }

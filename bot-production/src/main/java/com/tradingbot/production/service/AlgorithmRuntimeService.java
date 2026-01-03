@@ -66,7 +66,7 @@ public class AlgorithmRuntimeService {
 
             // 3. Create algorithm and restore state
             StatefulAlgorithm algorithm = createAlgorithm(instance);
-            algorithm.restoreState(instance.getState());
+            algorithm.restoreProductionState(instance.getState());
 
             // 4. Build current portfolio
             Portfolio portfolio = buildPortfolio(instance.getState(), candle.close());
@@ -89,7 +89,7 @@ public class AlgorithmRuntimeService {
             }
 
             // 8. Capture new state
-            AlgorithmState newState = algorithm.captureState();
+            AlgorithmState newState = algorithm.captureProductionState();
 
             // Update state with portfolio info
             newState.setCashBalance(portfolio.getCashBalance());
