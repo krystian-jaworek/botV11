@@ -25,9 +25,9 @@ import java.util.Map;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/v2/algorithms")
+@RequestMapping("/api/algorithms")
 @RequiredArgsConstructor
-public class AlgorithmControllerV2 {
+public class AlgorithmController {
 
     private final AlgorithmInstanceRepository instanceRepository;
     private final ExecutionLogRepository executionLogRepository;
@@ -36,7 +36,7 @@ public class AlgorithmControllerV2 {
 
     /**
      * Create new algorithm instance
-     * POST /api/v2/algorithms
+     * POST /api/algorithms
      */
     @PostMapping
     public ResponseEntity<?> createInstance(@RequestBody CreateAlgorithmRequest request) {
@@ -91,7 +91,7 @@ public class AlgorithmControllerV2 {
 
     /**
      * List all algorithm instances
-     * GET /api/v2/algorithms
+     * GET /api/algorithms
      */
     @GetMapping
     public ResponseEntity<List<AlgorithmInstanceDocument>> listInstances() {
@@ -101,7 +101,7 @@ public class AlgorithmControllerV2 {
 
     /**
      * Get specific algorithm instance
-     * GET /api/v2/algorithms/{id}
+     * GET /api/algorithms/{id}
      */
     @GetMapping("/{id}")
     public ResponseEntity<?> getInstance(@PathVariable String id) {
@@ -112,7 +112,7 @@ public class AlgorithmControllerV2 {
 
     /**
      * Start algorithm instance
-     * POST /api/v2/algorithms/{id}/start
+     * POST /api/algorithms/{id}/start
      */
     @PostMapping("/{id}/start")
     public ResponseEntity<?> startInstance(@PathVariable String id) {
@@ -147,7 +147,7 @@ public class AlgorithmControllerV2 {
 
     /**
      * Stop algorithm instance
-     * POST /api/v2/algorithms/{id}/stop
+     * POST /api/algorithms/{id}/stop
      */
     @PostMapping("/{id}/stop")
     public ResponseEntity<?> stopInstance(@PathVariable String id) {
@@ -175,7 +175,7 @@ public class AlgorithmControllerV2 {
 
     /**
      * Get algorithm state
-     * GET /api/v2/algorithms/{id}/state
+     * GET /api/algorithms/{id}/state
      */
     @GetMapping("/{id}/state")
     public ResponseEntity<?> getState(@PathVariable String id) {
@@ -186,7 +186,7 @@ public class AlgorithmControllerV2 {
 
     /**
      * Get execution logs
-     * GET /api/v2/algorithms/{id}/logs?limit=100
+     * GET /api/algorithms/{id}/logs?limit=100
      */
     @GetMapping("/{id}/logs")
     public ResponseEntity<List<ExecutionLogDocument>> getLogs(
@@ -201,7 +201,7 @@ public class AlgorithmControllerV2 {
 
     /**
      * Delete algorithm instance
-     * DELETE /api/v2/algorithms/{id}
+     * DELETE /api/algorithms/{id}
      */
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteInstance(@PathVariable String id) {
@@ -232,7 +232,7 @@ public class AlgorithmControllerV2 {
 
     /**
      * Health check
-     * GET /api/v2/algorithms/health
+     * GET /api/algorithms/health
      */
     @GetMapping("/health")
     public ResponseEntity<?> health() {
