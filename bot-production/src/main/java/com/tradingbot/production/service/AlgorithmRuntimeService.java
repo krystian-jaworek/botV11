@@ -194,11 +194,7 @@ public class AlgorithmRuntimeService {
      */
     private StatefulAlgorithm createAlgorithm(AlgorithmInstanceDocument instance) {
         return switch (instance.getType()) {
-            case SMA_OPPORTUNISTIC -> {
-                StatefulSMAOpportunistic algo = new StatefulSMAOpportunistic(instance.getConfig());
-                algo.setInitialBalance(instance.getState().getInitialBalance());
-                yield algo;
-            }
+            case SMA_OPPORTUNISTIC -> new StatefulSMAOpportunistic(instance.getConfig());
             // Future algorithm types can be added here
         };
     }
