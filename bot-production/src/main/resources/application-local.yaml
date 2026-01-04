@@ -1,0 +1,30 @@
+spring:
+  data:
+    mongodb:
+      host: localhost
+      port: 27017
+      database: trading-bot-local
+
+# ByBit test credentials for manual trading operations
+bybit:
+  api-key: ${BYBIT_API_KEY:your-api-key-here}
+  api-secret: ${BYBIT_API_SECRET:your-api-secret-here}
+  testnet: true  # true = testnet, false = mainnet
+
+# Security - use simple key for local development
+app:
+  security:
+    api-key: local-dev-key
+  encryption:
+    secret-key: local16charskeyy
+
+# Enable scheduler for local testing
+trading:
+  scheduler:
+    enabled: true
+
+# Logging
+logging:
+  level:
+    com.tradingbot.production: DEBUG
+    org.springframework.web: INFO
